@@ -1,0 +1,47 @@
+#!/bin/sh
+set -e
+workspace_root="$(git rev-parse --show-toplevel)"
+harness_root="$CODEX_HARNESS_ROOT"
+if [ -z "$harness_root" ]; then
+  harness_root="$workspace_root"
+fi
+if command -v cygpath >/dev/null 2>&1; then
+  harness_root_for_shell="$(cygpath -u "$harness_root" 2>/dev/null || printf '%s\n' "$harness_root")"
+elif command -v wslpath >/dev/null 2>&1; then
+  case "$harness_root" in
+    [A-Za-z]:*|\\\\*) harness_root_for_shell="$(wslpath -u "$harness_root" 2>/dev/null || printf '%s\n' "$harness_root")" ;;
+    *) harness_root_for_shell="$harness_root" ;;
+  esac
+else
+  harness_root_for_shell="$harness_root"
+fi
+ps_cmd="$(sh "$harness_root_for_shell/harness/scripts/resolve_powershell.sh")"
+ps_base="$(basename "$ps_cmd" | tr '[:upper:]' '[:lower:]')"
+if [ -f "$harness_root_for_shell/harness/scripts/powershell_env.sh" ]; then
+  . "$harness_root_for_shell/harness/scripts/powershell_env.sh"
+  prepare_harness_powershell_env "$harness_root_for_shell/harness" "$ps_base"
+fi
+script_path="$harness_root_for_shell/harness/scripts/assert_git_action_allowed.ps1"
+if command -v cygpath >/dev/null 2>&1; then
+  workspace_root="$(cygpath -w "$workspace_root")"
+  harness_root="$(cygpath -w "$harness_root")"
+  script_path="$(cygpath -w "$script_path")"
+elif [ "$ps_base" = "powershell.exe" ] && command -v wslpath >/dev/null 2>&1; then
+  workspace_root="$(wslpath -w "$workspace_root")"
+  script_path="$(wslpath -w "$script_path")"
+fi
+
+tmp="${TMP:-/tmp}/codex_pre_push_$$.txt"
+cat > "$tmp"
+trap 'rm -f "$tmp"' EXIT
+if command -v cygpath >/dev/null 2>&1; then
+  tmp_for_ps="$(cygpath -w "$tmp")"
+elif [ "$ps_base" = "powershell.exe" ] && command -v wslpath >/dev/null 2>&1; then
+  tmp_for_ps="$(wslpath -w "$tmp")"
+else
+  tmp_for_ps="$tmp"
+fi
+case "$ps_base" in
+  powershell.exe) exec "$ps_cmd" -NoProfile -ExecutionPolicy Bypass -File "$script_path" -Action push -RemoteName "$1" -RemoteUrl "$2" -RefUpdateFile "$tmp_for_ps" -RepositoryRoot "$workspace_root" ;;
+  *) exec "$ps_cmd" -NoProfile -File "$script_path" -Action push -RemoteName "$1" -RemoteUrl "$2" -RefUpdateFile "$tmp_for_ps" -RepositoryRoot "$workspace_root" ;;
+esac

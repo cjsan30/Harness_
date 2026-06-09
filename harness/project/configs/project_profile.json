@@ -1,0 +1,299 @@
+{
+  "project": {
+    "name": "todo-classifier",
+    "summary": "Harness validation target for deterministic AI-like Todo classification, JSON schema evaluation, sample test cases, and log review UI.",
+    "language": "JavaScript",
+    "runtime": "Node.js 20+",
+    "framework": "vanilla dashboard with API server",
+    "ide": "VS Code",
+    "repository_root": "."
+  },
+  "requirements": {
+    "source_docs": [
+      "requirements.md",
+      "README.md",
+      "AGENT.md",
+      "docs/design_notes.md",
+      "harness/AGENT.md"
+    ],
+    "success_criteria": [
+      "natural language todo input returns structured JSON todos",
+      "schema/category/priority/due/task split/confidence evaluation is visible and testable",
+      "sample test cases and evaluation logs are available through API and UI",
+      "harness build, unit, integration, and benchmark smoke all pass"
+    ]
+  },
+  "commands": {
+    "build": "make build",
+    "unit": "make unit",
+    "integration": "make integration",
+    "benchmark_smoke": "make benchmark-smoke",
+    "release": "make build",
+    "full_cycle": "pwsh -NoProfile -File harness/scripts/run_harness_cycle.ps1 -SkipRetryPrompt"
+  },
+  "owners": {
+    "agent-runtime": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "src/runtime/AGENT.md"
+      ],
+      "work_area": "src",
+      "validation": "make integration && make benchmark-smoke",
+      "failure_scope": [
+        "api server",
+        "static serving",
+        "runtime flow"
+      ]
+    },
+    "agent-query": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "src/query/AGENT.md"
+      ],
+      "work_area": "src",
+      "validation": "make unit && make integration",
+      "failure_scope": [
+        "todo classifier",
+        "due parsing",
+        "category inference"
+      ]
+    },
+    "agent-storage": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "src/storage/AGENT.md"
+      ],
+      "work_area": "src",
+      "validation": "make unit && make integration",
+      "failure_scope": [
+        "evaluation log storage",
+        "JSONL persistence"
+      ]
+    },
+    "agent-index": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "src/index/AGENT.md"
+      ],
+      "work_area": "public",
+      "validation": "make build && make benchmark-smoke",
+      "failure_scope": [
+        "dashboard rendering",
+        "UI state",
+        "schema rules view"
+      ]
+    },
+    "agent-tests": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "tests/AGENT.md"
+      ],
+      "work_area": "tests",
+      "validation": "make unit && make integration",
+      "failure_scope": [
+        "unit tests",
+        "API integration tests",
+        "benchmark smoke"
+      ]
+    },
+    "manager-main": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "harness/project/prompts/manager_main.md",
+        "harness/project/prompts/manager_main_seed.md",
+        "harness/configs/git_policy.md"
+      ],
+      "work_area": "project-wide",
+      "validation": "make test",
+      "failure_scope": [
+        "cross-module",
+        "interface reconciliation",
+        "integration ownership"
+      ]
+    },
+    "manager-harness": {
+      "read": [
+        "AGENT.md",
+        "docs/requirements.md",
+        "docs/requirements_raw_links.md",
+        "docs/env_manifest.md",
+        "docs/subagent_plan.md",
+        "docs/subagent_first_prompts.md",
+        "harness/AGENT.md",
+        "harness/project/prompts/manager_harness.md",
+        "harness/configs/git_policy.md",
+        "harness/configs/retry_dispatch_policy.md"
+      ],
+      "work_area": "harness",
+      "validation": "pwsh -NoProfile -File harness/scripts/run_harness_cycle.ps1 -SkipRetryPrompt",
+      "failure_scope": [
+        "tooling",
+        "dispatch",
+        "automation"
+      ]
+    }
+  },
+  "dispatch": {
+    "compile_owner": "manager-main",
+    "interface_owner": "manager-main",
+    "environment_owner": "manager-harness",
+    "default_failure_type": "logic",
+    "repeat_failure_escalation_owner": "manager-main"
+  },
+  "failure_patterns": {
+    "environment": [
+      "command not found",
+      "not recognized",
+      "No such file",
+      "No such file or directory",
+      "cannot find the path specified",
+      "Cannot find module",
+      "ERR_MODULE_NOT_FOUND",
+      "ModuleNotFoundError",
+      "ImportError",
+      "package not found",
+      "No module named",
+      "no make-compatible command found",
+      "Access is denied",
+      "Permission denied",
+      "UnauthorizedAccessException",
+      "EPERM",
+      "EACCES",
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ENOTFOUND",
+      "network timeout",
+      "Temporary failure in name resolution"
+    ],
+    "compile": [
+      "error:",
+      "undefined reference",
+      "fatal error",
+      "compilation failed",
+      "SyntaxError",
+      "TypeScript error",
+      "TS2307",
+      "TS2322",
+      "error[E",
+      "cannot find symbol",
+      "Compilation failure",
+      "CS",
+      "go build",
+      "build failed"
+    ],
+    "interface": [
+      "mismatch",
+      "incompatible",
+      "conflict",
+      "expected",
+      "actual",
+      "AssertionError",
+      "TypeError",
+      "ReferenceError",
+      "undefined method",
+      "NoMethodError",
+      "AttributeError",
+      "contract",
+      "schema validation"
+    ],
+    "secret": [
+      "missing environment variable",
+      "Missing required environment variable",
+      "API key",
+      "api_key",
+      "secret",
+      "token",
+      "DATABASE_URL",
+      "OPENAI_API_KEY",
+      "No API key",
+      "authentication required",
+      "401 Unauthorized",
+      "403 Forbidden"
+    ],
+    "requirements": [
+      "ambiguous requirement",
+      "requirements unclear",
+      "needs clarification",
+      "not specified",
+      "product decision",
+      "project_intake_questions.md",
+      "intake review"
+    ],
+    "worker": [
+      "worker_did_not_complete_assignment_marked_fail",
+      "worker did not complete",
+      "assignment was not completed",
+      "assignment failed after",
+      "previous failed assignment requires resume",
+      "active invoke lock",
+      "codex run summary"
+    ]
+  },
+  "git_workflow": {
+    "hooks_path": ".githooks",
+    "state_file": "harness/state/git_workflow/state.json",
+    "reports_dir": "harness/reports/git_workflow",
+    "bootstrap_branch": "main",
+    "main_branch": "main",
+    "dev_branch": "dev",
+    "feature_branch_prefix": "codex/",
+    "test_branch_prefix": "codex/test/"
+  },
+  "harness": {
+    "logs": "harness/reports/logs",
+    "latest_report": "harness/reports/latest_report.md",
+    "preflight_report": "harness/reports/preflight_report.md",
+    "status_report": "harness/reports/status.md",
+    "status_json": "harness/reports/status.json",
+    "test_results": "harness/reports/test_results",
+    "retry_prompts": "harness/reports/retry_prompts",
+    "seed_plans": "harness/reports/seed_plans",
+    "dispatch_packets": "harness/reports/dispatch_packets",
+    "agent_runs": "harness/reports/agent_runs",
+    "assignments_root": "harness/assignments",
+    "assignment_worktrees_root": "harness/state/worktrees",
+    "notification_state": "harness/state/notifications",
+    "dispatch_log": "harness/reports/dispatch_log.md",
+    "seed_dispatch_log": "harness/reports/seed_dispatch_log.md",
+    "assignment_log": "harness/reports/assignment_log.md",
+    "live_dispatch_log": "harness/reports/live_dispatch_log.md",
+    "notification_log": "harness/reports/notifications_log.md",
+    "assignment_stale_seconds": 7200
+  }
+}

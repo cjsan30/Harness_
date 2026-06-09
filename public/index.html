@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Todo Classifier Harness</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="sidebar" aria-label="Primary">
+        <div class="brand">
+          <span class="brand-mark">TC</span>
+          <div>
+            <strong>Todo Classifier</strong>
+            <span>Harness Lab</span>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-item is-active" data-view="playground">Playground</button>
+          <button class="nav-item" data-view="tests">Test Cases</button>
+          <button class="nav-item" data-view="logs">Evaluation Logs</button>
+          <button class="nav-item" data-view="rules">Schema Rules</button>
+        </nav>
+        <div class="side-metric">
+          <span>Last status</span>
+          <strong id="side-status">READY</strong>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">AI output validation dashboard</p>
+            <h1>Natural language Todo를 JSON으로 구조화하고 Harness 기준으로 평가합니다.</h1>
+          </div>
+          <div class="status-pill" id="api-status">API CHECK</div>
+        </header>
+
+        <section class="view is-visible" id="view-playground">
+          <div class="input-panel">
+            <label for="todo-input">Natural Language Input</label>
+            <textarea id="todo-input" rows="4" placeholder="예: 오늘 저녁에 운동하고 내일 이력서 수정하기"></textarea>
+            <p id="input-error" class="form-message" role="alert"></p>
+            <div class="button-row">
+              <button class="primary-button" id="classify-button" disabled><span>Classify</span></button>
+              <button class="ghost-button" id="sample-button">Sample Input</button>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel result-panel">
+              <div class="panel-heading">
+                <h2>Parsed Todo Cards</h2>
+                <span class="badge" id="todo-count">0 items</span>
+              </div>
+              <div class="todo-list" id="todo-list"></div>
+            </section>
+
+            <section class="panel score-panel">
+              <div class="panel-heading">
+                <h2>Harness Evaluation</h2>
+                <span class="badge neutral" id="eval-status">READY</span>
+              </div>
+              <div class="score-ring" id="score-ring">--</div>
+              <p id="eval-reason" class="muted">분류를 실행하면 평가 결과가 표시됩니다.</p>
+              <div class="check-grid" id="check-grid"></div>
+            </section>
+
+            <section class="panel code-panel">
+              <div class="panel-heading">
+                <h2>JSON Output</h2>
+                <button class="small-button" id="copy-json">Copy</button>
+              </div>
+              <pre id="json-output">[]</pre>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-tests">
+          <div class="panel wide-panel">
+            <div class="panel-heading">
+              <h2>Sample Test Cases</h2>
+              <span class="badge neutral">MVP SET</span>
+            </div>
+            <div id="test-case-list" class="test-case-list"></div>
+          </div>
+          <div class="panel wide-panel">
+            <div class="panel-heading">
+              <h2>Test Result</h2>
+              <span class="badge neutral" id="test-result-status">NOT RUN</span>
+            </div>
+            <pre id="test-result-json">{}</pre>
+          </div>
+        </section>
+
+        <section class="view" id="view-logs">
+          <div class="panel wide-panel">
+            <div class="panel-heading">
+              <h2>Evaluation Logs</h2>
+              <div class="segmented">
+                <button data-filter="ALL" class="is-active">ALL</button>
+                <button data-filter="PASS">PASS</button>
+                <button data-filter="FAIL">FAIL</button>
+              </div>
+            </div>
+            <div id="log-list" class="log-list"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-rules">
+          <div class="rules-layout">
+            <section class="panel">
+              <h2>Todo JSON Schema</h2>
+              <pre id="schema-json">Loading...</pre>
+            </section>
+            <section class="panel">
+              <h2>Evaluation Criteria</h2>
+              <ul class="criteria-list">
+                <li>JSON 배열이어야 합니다.</li>
+                <li>task, category, priority, due, confidence가 필수입니다.</li>
+                <li>category와 priority는 허용값만 사용합니다.</li>
+                <li>점수 80 이상이면 PASS입니다.</li>
+                <li>애매한 입력은 낮은 confidence로 처리합니다.</li>
+              </ul>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

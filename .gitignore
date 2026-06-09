@@ -1,0 +1,12 @@
+node_modules/
+data/evaluation-logs.jsonl
+coverage/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example
+harness/state/
+harness/reports/*
+!harness/reports/report_template.md
+!harness/reports/retry_prompt_template.md

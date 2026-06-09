@@ -1,0 +1,21 @@
+{
+  "name": "todo-classifier-harness-test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "build": "node scripts/validate_project.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:unit": "node --test tests/classifier.test.mjs tests/evaluator.test.mjs tests/aiResponse.test.mjs",
+    "test:integration": "node --test tests/api.test.mjs",
+    "benchmark:smoke": "node tests/benchmark-smoke.mjs"
+  },
+  "optionalDependencies": {
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
