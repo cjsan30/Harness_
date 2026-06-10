@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+workspace_root="$(git rev-parse --show-toplevel)"
+harness_root="$CODEX_HARNESS_ROOT"
+if [ -z "$harness_root" ]; then
+  harness_root="$workspace_root"
+fi
+harness_root_for_shell="$harness_root"
+for candidate in "$harness_root_for_shell/harness/scripts/path_common.sh" "$workspace_root/harness/scripts/path_common.sh"; do
+  if [ -f "$candidate" ]; then
+    . "$candidate"
+    harness_root_for_shell="$(to_harness_shell_path "$harness_root")"
+    break
+  fi
+done
+if ! command -v to_harness_powershell_path >/dev/null 2>&1; then
+  to_harness_powershell_path() { printf '%s\n' "$1"; }
+fi
+ps_cmd="$(sh "$harness_root_for_shell/harness/scripts/resolve_powershell.sh")"
+ps_base="$(basename "$ps_cmd" | tr '[:upper:]' '[:lower:]')"
+if [ -f "$harness_root_for_shell/harness/scripts/powershell_env.sh" ]; then
+  . "$harness_root_for_shell/harness/scripts/powershell_env.sh"
+  prepare_harness_powershell_env "$harness_root_for_shell/harness" "$ps_base"
+fi
+script_path="$harness_root_for_shell/harness/scripts/assert_git_action_allowed.ps1"
+workspace_root="$(to_harness_powershell_path "$workspace_root" "$ps_base")"
+script_path="$(to_harness_powershell_path "$script_path" "$ps_base")"
+
+tmp="${TMP:-/tmp}/codex_pre_push_$$.txt"
+cat > "$tmp"
+trap 'rm -f "$tmp"' EXIT
+tmp_for_ps="$(to_harness_powershell_path "$tmp" "$ps_base")"
+case "$ps_base" in
+  powershell.exe) exec "$ps_cmd" -NoProfile -ExecutionPolicy Bypass -File "$script_path" -Action push -RemoteName "$1" -RemoteUrl "$2" -RefUpdateFile "$tmp_for_ps" -RepositoryRoot "$workspace_root" ;;
+  *) exec "$ps_cmd" -NoProfile -File "$script_path" -Action push -RemoteName "$1" -RemoteUrl "$2" -RefUpdateFile "$tmp_for_ps" -RepositoryRoot "$workspace_root" ;;
+esac

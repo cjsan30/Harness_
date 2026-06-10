@@ -1,0 +1,345 @@
+openapi: 3.1.0
+info:
+  title: AI Troubleshooting Board API
+  version: 0.1.0
+servers:
+  - url: /api
+paths:
+  /auth/signup:
+    post:
+      summary: Sign up with email, password, and nickname.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "201":
+          description: User created.
+  /auth/login:
+    post:
+      summary: Log in with email and password.
+      responses:
+        "200":
+          description: Auth token and current user.
+  /auth/logout:
+    post:
+      summary: Invalidate the current session or token.
+      responses:
+        "204":
+          description: Logged out.
+  /auth/me:
+    get:
+      summary: Return the current authenticated user.
+      responses:
+        "200":
+          description: Current user.
+  /posts:
+    get:
+      summary: List posts with keyword, tag, status, solved, sort, page, and size filters.
+      parameters:
+        - $ref: "#/components/parameters/Keyword"
+        - $ref: "#/components/parameters/Tag"
+        - $ref: "#/components/parameters/PostStatus"
+        - name: solved
+          in: query
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [latest, relevance, views, comments]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paged post summaries.
+    post:
+      summary: Create a troubleshooting post.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostRequest"
+      responses:
+        "201":
+          description: Created post detail.
+  /posts/{postId}:
+    get:
+      summary: Return post detail with comments, latest AI analysis, similar cases, and solution.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "200":
+          description: Post detail.
+    patch:
+      summary: Update a post. Author or admin only.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "200":
+          description: Updated post detail.
+    delete:
+      summary: Soft delete a post. Author or admin only.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "204":
+          description: Post deleted.
+  /posts/{postId}/comments:
+    post:
+      summary: Add a comment to a post.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "201":
+          description: Comment created.
+  /comments/{commentId}:
+    delete:
+      summary: Delete the current user's comment.
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Comment deleted.
+  /posts/{postId}/solutions:
+    post:
+      summary: Register a solution and mark the post as solved.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSolutionRequest"
+      responses:
+        "201":
+          description: Solution created.
+  /solutions/{solutionId}:
+    patch:
+      summary: Update a solution.
+      parameters:
+        - name: solutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Solution updated.
+  /posts/{postId}/ai-analysis:
+    post:
+      summary: Request AI analysis for a post.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "202":
+          description: AI analysis queued.
+    get:
+      summary: List AI analysis history for a post.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "200":
+          description: AI analysis history.
+  /ai-analysis/{analysisId}:
+    get:
+      summary: Return one AI analysis result.
+      parameters:
+        - name: analysisId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI analysis detail.
+  /posts/{postId}/similar:
+    post:
+      summary: Run similar case search.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "202":
+          description: Similar search queued or completed.
+    get:
+      summary: Return similar case search results.
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+      responses:
+        "200":
+          description: Similar case results.
+  /agent-runs:
+    post:
+      summary: Start a read-only agent run for a post.
+      responses:
+        "202":
+          description: Agent run created.
+  /agent-runs/{runId}:
+    get:
+      summary: Return agent run detail.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agent run detail.
+  /agent-runs/{runId}/steps:
+    get:
+      summary: Return ordered agent steps and tool call summaries.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Agent steps.
+  /integrations:
+    get:
+      summary: Return external integration connection status.
+      responses:
+        "200":
+          description: Integration list.
+components:
+  parameters:
+    Keyword:
+      name: keyword
+      in: query
+      schema:
+        type: string
+    Tag:
+      name: tag
+      in: query
+      schema:
+        type: string
+    PostStatus:
+      name: status
+      in: query
+      schema:
+        $ref: "#/components/schemas/PostStatus"
+    PostId:
+      name: postId
+      in: path
+      required: true
+      schema:
+        type: integer
+  schemas:
+    ApiResponse:
+      type: object
+      required: [success, data, error]
+      properties:
+        success:
+          type: boolean
+        data:
+          nullable: true
+        error:
+          nullable: true
+          $ref: "#/components/schemas/ApiError"
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    SignupRequest:
+      type: object
+      required: [email, password, nickname]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        nickname:
+          type: string
+    CreatePostRequest:
+      type: object
+      required: [title, tagIds, environment, problemDescription]
+      properties:
+        title:
+          type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+        environment:
+          type: object
+          additionalProperties: true
+        problemDescription:
+          type: string
+        errorLog:
+          type: string
+        reproductionSteps:
+          type: array
+          items:
+            type: string
+        triedMethods:
+          type: array
+          items:
+            type: string
+        blockedPoint:
+          type: string
+        runAiAnalysis:
+          type: boolean
+          default: false
+    CreateSolutionRequest:
+      type: object
+      required: [rootCause, solutionDetail, verificationMethod]
+      properties:
+        rootCause:
+          type: string
+        solutionDetail:
+          type: string
+        verificationMethod:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+        lessonLearned:
+          type: string
+        ragIncluded:
+          type: boolean
+          default: true
+    PostStatus:
+      type: string
+      enum: [OPEN, ANALYZING, NEEDS_MORE_CONTEXT, SOLVED, ARCHIVED, DELETED]
+    AiAnalysisStatus:
+      type: string
+      enum: [NOT_REQUESTED, PENDING, RUNNING, SUCCEEDED, FAILED, RETRY_REQUIRED, CANCELLED]

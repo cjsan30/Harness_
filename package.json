@@ -1,0 +1,10 @@
+{
+  "name": "harness-ai-troubleshooting-board",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-all.mjs",
+    "dev:all": "node scripts/dev-all.mjs"
+  }
+}

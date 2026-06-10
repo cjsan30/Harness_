@@ -1,0 +1,15 @@
+{
+  "name": "ai-troubleshooting-board-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "validate": "node scripts/validate.mjs",
+    "e2e": "node scripts/run-e2e.mjs",
+    "e2e:install": "node scripts/install-playwright.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0"
+  }
+}

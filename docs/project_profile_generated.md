@@ -1,0 +1,301 @@
+# Project Profile Summary
+
+Generated from:
+
+- project/configs/project_profile.json
+
+## Project
+
+- name: ai-troubleshooting-board
+- language: JavaScript, Java, SQL
+- runtime: browser frontend plus Spring Boot contract
+- framework: dependency-free frontend MVP; Spring Boot target backend
+- ide: VS Code
+
+## Summary
+
+RAG 기반 개발자 트러블슈팅 게시판 MVP with structured posts, AI analysis panel, solution records, and backend contract baseline.
+
+## Source Docs
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+
+## Success Criteria
+
+- frontend MVP renders board list, create form, detail view, AI panel, comments, and solution registration with mock data
+- backend baseline includes shared status enums, PostgreSQL/pgvector schema, and OpenAPI contract
+- requirements, UX guide, and implementation task documents are available from docs/
+
+## Commands
+
+- build: npm --prefix frontend run validate
+- unit: npm --prefix frontend run validate
+- integration: npm --prefix frontend run e2e
+- benchmark_smoke: npm --prefix frontend run validate
+- release: npm --prefix frontend run validate
+- full_cycle: npm --prefix frontend run e2e
+
+## Owners
+
+### agent-runtime
+
+- work_area: frontend
+- validation: npm --prefix frontend run validate
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+
+Failure scope:
+
+- frontend shell
+- interactive state
+- mock AI flow
+### agent-query
+
+- work_area: frontend/src
+- validation: npm --prefix frontend run validate
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- frontend/src/data.js
+
+Failure scope:
+
+- search
+- filters
+- similar cases
+### agent-storage
+
+- work_area: backend
+- validation: npm --prefix frontend run validate
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- backend/src/main/resources/db/schema.sql
+
+Failure scope:
+
+- schema
+- status persistence
+- RAG chunk contract
+### agent-index
+
+- work_area: backend/src/main/resources
+- validation: npm --prefix frontend run validate
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- backend/src/main/resources/api/openapi.yaml
+- frontend/src/data.js
+
+Failure scope:
+
+- RAG search contract
+- AI analysis contract
+- Agent log contract
+### agent-tests
+
+- work_area: frontend/scripts
+- validation: npm --prefix frontend run e2e
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- frontend/scripts/validate.mjs
+- frontend/src/data.js
+
+Failure scope:
+
+- sample data validation
+- status coverage
+- smoke checks
+### manager-main
+
+- work_area: project-wide
+- validation: npm --prefix frontend run validate
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- configs/git_policy.md
+
+Failure scope:
+
+- cross-module
+- requirements alignment
+- MVP scope
+### manager-harness
+
+- work_area: scripts
+- validation: pwsh -NoProfile -File scripts/audit_generated_artifacts.ps1
+
+Read first:
+
+- AGENT.md
+- docs/01_REQUIREMENTS.md
+- docs/02_UX_GUIDE.md
+- docs/03_IMPLEMENTATION_TASKS.md
+- docs/status_values.md
+- docs/mvp_implementation_status_2026-06-09.md
+- docs/harness_update_notes_2026-06-09.md
+- configs/git_policy.md
+- configs/retry_dispatch_policy.md
+- scripts/harness_common.ps1
+
+Failure scope:
+
+- tooling
+- preflight
+- portable root detection
+
+## Dispatch
+
+- compile_owner: manager-main
+- interface_owner: manager-main
+- environment_owner: manager-harness
+- default_failure_type: logic
+- repeat_failure_escalation_owner: manager-main
+
+## Failure Patterns
+
+### environment
+
+- command not found
+- not recognized
+- No such file
+- No such file or directory
+- Cannot find module
+- ERR_MODULE_NOT_FOUND
+- ModuleNotFoundError
+- ImportError
+- package not found
+- no make-compatible command found
+- Access is denied
+- Permission denied
+- UnauthorizedAccessException
+- EPERM
+- EACCES
+- ECONNREFUSED
+- ETIMEDOUT
+- ENOTFOUND
+- network timeout
+- Temporary failure in name resolution
+
+### compile
+
+- error:
+- SyntaxError
+- TypeScript error
+- cannot find symbol
+- Compilation failure
+
+### interface
+
+- mismatch
+- incompatible
+- contract
+- schema validation
+- expected
+- actual
+
+### secret
+
+- missing environment variable
+- API key
+- api_key
+- secret
+- token
+- DATABASE_URL
+- OPENAI_API_KEY
+- 401 Unauthorized
+- 403 Forbidden
+
+### requirements
+
+- ambiguous requirement
+- requirements unclear
+- needs clarification
+- not specified
+- product decision
+
+### worker
+
+- worker_did_not_complete_assignment_marked_fail
+- assignment was not completed
+- active invoke lock
+## Git Workflow
+
+- hooks_path: .githooks
+- protected_branches: main dev
+- bootstrap_branch: main
+- main_branch: main
+- dev_branch: dev
+- feature_branch_prefix: codex/
+- test_branch_prefix: codex/test/
+- state_file: state/git_workflow/state.json
+- reports_dir: reports/git_workflow
+
+## Harness Paths
+
+- logs: reports/logs
+- latest_report: reports/latest_report.md
+- preflight_report: reports/preflight_report.md
+- status_report: reports/status.md
+- status_json: reports/status.json
+- test_results: reports/test_results
+- retry_prompts: reports/retry_prompts
+- seed_plans: reports/seed_plans
+- dispatch_packets: reports/dispatch_packets
+- agent_runs: reports/agent_runs
+- assignments_root: assignments
+- assignment_worktrees_root: state/worktrees
+- notification_state: state/notifications
+- dispatch_log: reports/dispatch_log.md
+- seed_dispatch_log: reports/seed_dispatch_log.md
+- assignment_log: reports/assignment_log.md
+- live_dispatch_log: reports/live_dispatch_log.md
+- notification_log: reports/notifications_log.md
+- generated_artifacts_audit: reports/generated_artifacts_audit.md
+- porting_layout_audit: reports/porting_layout_audit.md
+- git_remote_auth_audit: reports/git_remote_auth_audit.md
+- bootstrap_initial_commit_plan: reports/bootstrap_initial_commit_plan.md
+- assignment_stale_seconds: 7200
