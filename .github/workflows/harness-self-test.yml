@@ -1,0 +1,36 @@
+name: Harness self-test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safety:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            shell: pwsh
+          - os: windows-latest
+            shell: powershell
+          - os: ubuntu-latest
+            shell: pwsh
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and isolated safety regressions
+        shell: ${{ matrix.shell }}
+        run: ./scripts/test_harness.ps1
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.os }}-${{ matrix.shell }}
+          path: .test-output/**/results.json
+          include-hidden-files: true
+      - name: Read-only dashboard HTTP regression
+        shell: ${{ matrix.shell }}
+        run: python -B scripts/test_harness_dashboard_server.py
