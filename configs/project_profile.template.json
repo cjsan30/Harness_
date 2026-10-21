@@ -283,8 +283,8 @@
     "bootstrap_branch": "main",
     "main_branch": "main",
     "dev_branch": "dev",
-    "feature_branch_prefix": "codex/",
-    "test_branch_prefix": "codex/test/"
+    "feature_branch_prefix": "",
+    "test_branch_prefix": "test/"
   },
   "harness": {
     "logs": "harness/reports/logs",

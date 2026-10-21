@@ -79,4 +79,4 @@
 
 Windows Git POSIX shell + PowerShell 5.1/7에서 검증했습니다. WSL/Linux·원격 CI·유료 provider는 실행하지 않았습니다. 임의의 사용자 명령 전체, 모든 shell quoting 문법, 실제 대규모 제품을 검증한 결과는 아닙니다. 보안 범주는 입력/경로/재귀/실패 오인 회귀이며 외부 침투 테스트나 OS sandbox 검증을 뜻하지 않습니다.
 
-실행 명령은 여전히 OS shell 문자열이므로 운영체제별 인용 규칙과 신뢰할 수 있는 프로필이 필요합니다. 정확한 옵션·종료 코드·설치 경계와 전환 방법은 [Shell 계약](shell_commands.md)을 따릅니다.
+실행 명령은 여전히 OS shell 문자열이므로 운영체제별 인용 규칙과 신뢰할 수 있는 프로필이 필요합니다. 정확한 옵션·종료 코드·설치 경계와 전환 방법은 [Shell 계약](../shell_commands.md)을 따릅니다.

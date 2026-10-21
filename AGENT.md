@@ -3,7 +3,7 @@
 ## Development Checkout
 
 This repository develops the reusable Harness engine. It has no active target project profile.
-Read docs/SESSION_HANDOFF.md, docs/improvement_backlog.md, docs/current_state.md and docs/feature_inventory.md before planning changes.
+Read docs/current_state.md first; consult docs/improvement_backlog.md and docs/feature_inventory.md as needed before planning changes.
 Paths beginning with harness/ below describe the installed layout in a target repository.
 Do not treat the current checkout as configured for live dispatch or a passing full cycle.
 
@@ -146,7 +146,7 @@ Start here depending on the task:
 - `-PreflightOnly` verifies readiness and writes summary artifacts without execution
 - live execution uses an isolated assignment worktree under `harness/state/worktrees` and runs on the expected assignment feature branch inside that worktree
 - live seed execution retries failed assignments up to the configured limit and can continue to later assignments without operator input
-- when every assignment passes, seed execution can automatically promote through `dev`, run the final gate on a `codex/test/*` branch, and request `main` approval
+- when every assignment passes, seed execution can automatically promote through `dev`, run the final gate on a `test/*` branch, and request `main` approval
 - seed execution must not approve or merge `main`; that remains a manual final-manager action
 
 ## Git Workflow Safety
@@ -155,16 +155,17 @@ Harness treats Git promotion as an enforced workflow, not a note in documentatio
 
 Rules:
 
-- feature work happens on `codex/<owner>/<task>`
-- direct commits to `dev`, `main`, and `codex/test/*` are blocked by local hooks
+- feature work happens on `<owner>/<task>`; commits there are not gated, but pushing requires a passing feature gate for the head tree
+- direct commits to `dev`, `main`, and `test/*` are blocked by local hooks
+- merged feature/test branches may be deleted remotely; unmerged ones only after the user records `approve_branch_deletion.ps1` for that head; `dev`/`main` deletion is blocked
 - a feature branch must pass `run_git_gate.ps1 -Stage feature` before commit and push
 - a feature branch must pass `run_git_gate.ps1 -Stage integration` before promotion into `dev`
-- a dedicated `codex/test/<candidate>` branch must pass `run_git_gate.ps1 -Stage final` before main approval
+- a dedicated `test/<candidate>` branch must pass `run_git_gate.ps1 -Stage final` before main approval
 - `request_main_merge_approval.ps1` and `set_main_merge_approval.ps1` record the approval step for `main`
 - `authorize_branch_promotion.ps1` records the exact source-head authorization required by protected merges
 - manual protected merges must use `merge_authorized_branch.ps1` so the merge hook receives the intended source branch and source head
 - hybrid PR merges must use `open_pr_candidate.ps1`, `check_pr_status.ps1`, and `merge_pr_if_allowed.ps1`
-- PR merge control requires GitHub CLI, an open non-draft PR from the approved `codex/test/*` head to `main`, and passing required checks
+- PR merge control requires GitHub CLI, an open non-draft PR from the approved `test/*` head to `main`, and passing required checks
 - GitHub ruleset control must use `install_github_ruleset.ps1` and `audit_github_policy.ps1`
 - the default server ruleset blocks delete and force-push, requires PRs, requires one approving review, and requires strict `Harness CI`
 - platform engineering changes must keep `Harness CI` as the required-check aggregator even when matrix jobs are added

@@ -65,4 +65,4 @@ Git 파일 목록은 UTF-8/NUL 원문으로 읽어 한글·공백 경로와 shel
 
 제품 요구사항의 의미상 충족, 임의 스크립트가 숨긴 실패, ignored dependency·환경·외부 서비스 재현성, 악의적인 로컬 증거 변조는 이 회귀의 보장 범위가 아닙니다. owner queue lease 안의 검증에 timeout은 없습니다. 실제 유료 AI, 원격 CI/GitHub merge, WSL/Linux는 실행하지 않았습니다. 개발 저장소의 활성 프로필·baseline 커밋·hook·remote는 만들지 않았습니다.
 
-계약과 운영 명령은 [실행 증거 문서](assignment_evidence.md), 다음 작업은 [진행표](improvement_backlog.md)와 [세션 인계](SESSION_HANDOFF.md)에 있습니다.
+계약과 운영 명령은 [실행 증거 문서](../assignment_evidence.md), 다음 작업은 [진행표](../improvement_backlog.md)와 [세션 인계](session_handoff_2026-10-15.md)에 있습니다.

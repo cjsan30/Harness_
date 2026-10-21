@@ -54,18 +54,18 @@ try {
     Write-Utf8File (Join-Path $fixture 'sample.txt') 'baseline'
     Invoke-HarnessProcess git @('-C', $fixture, 'add', 'sample.txt') | Out-Null
     Invoke-HarnessProcess git @('-C', $fixture, '-c', 'core.hooksPath=', '-c', 'user.name=Harness Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fixture') | Out-Null
-    Invoke-HarnessProcess git @('-C', $fixture, 'branch', 'codex/test/candidate') | Out-Null
+    Invoke-HarnessProcess git @('-C', $fixture, 'branch', 'test/candidate') | Out-Null
     $head = (Invoke-HarnessProcess git @('-C', $fixture, 'rev-parse', 'HEAD')).Output.Trim()
     $tree = (Invoke-HarnessProcess git @('-C', $fixture, 'rev-parse', 'HEAD^{tree}')).Output.Trim()
     $statePath = Join-Path $fixture 'harness/state/git_workflow/state.json'
-    $approval = @{id='approval-fixture'; source_branch='codex/test/candidate'; source_head=$head; source_tree=$tree; target_branch='main'; repository_root=$fixture; stage='final'; status='approved'; requested_at='2026-01-01T00:00:00Z'}
+    $approval = @{id='approval-fixture'; source_branch='test/candidate'; source_head=$head; source_tree=$tree; target_branch='main'; repository_root=$fixture; stage='final'; status='approved'; requested_at='2026-01-01T00:00:00Z'}
     function Write-FixtureState {
-        $state = @{version=1; approvals=@($approval); promotions=@(); validations=@(@{branch='codex/test/candidate'; tree_hash=$tree; stage='final'; status='pass'; recorded_at='2026-01-01T00:00:00Z'})}
+        $state = @{version=1; approvals=@($approval); promotions=@(); validations=@(@{branch='test/candidate'; tree_hash=$tree; stage='final'; status='pass'; recorded_at='2026-01-01T00:00:00Z'})}
         Write-Utf8File $statePath ($state | ConvertTo-Json -Depth 10)
     }
     Test-Case 'matching approval permits promotion' {
         Write-FixtureState
-        $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'codex/test/candidate', '-TargetBranch', 'main', '-ApprovalId', 'approval-fixture')
+        $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'test/candidate', '-TargetBranch', 'main', '-ApprovalId', 'approval-fixture')
         Assert-True $r.Success $r.Output
     }
     foreach ($field in @('source_branch', 'source_head', 'target_branch', 'repository_root', 'stage')) {
@@ -74,7 +74,7 @@ try {
             try {
                 $approval[$field] = 'foreign-value'
                 Write-FixtureState
-                $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'codex/test/candidate', '-TargetBranch', 'main', '-ApprovalId', 'approval-fixture')
+                $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'test/candidate', '-TargetBranch', 'main', '-ApprovalId', 'approval-fixture')
                 Assert-True (-not $r.Success) "promotion accepted a different $field"
             } finally { $approval[$field] = $original }
         }
@@ -83,7 +83,7 @@ try {
         $approval.Remove('repository_root')
         try {
             Write-FixtureState
-            $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'codex/test/candidate', '-TargetBranch', 'main')
+            $r = Run-Child (Join-Path $PSScriptRoot 'authorize_branch_promotion.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'test/candidate', '-TargetBranch', 'main')
             Assert-True (-not $r.Success) 'legacy approval accepted without a repository binding'
         } finally { $approval.repository_root = $fixture }
     }
@@ -103,7 +103,7 @@ try {
         $empty = [IO.File]::ReadAllText($statePath) | ConvertFrom-Json
         $empty.approvals = @()
         Write-Utf8File $statePath ($empty | ConvertTo-Json -Depth 10)
-        $r = Run-Child (Join-Path $PSScriptRoot 'request_main_merge_approval.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'codex/test/candidate')
+        $r = Run-Child (Join-Path $PSScriptRoot 'request_main_merge_approval.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'test/candidate')
         Assert-True $r.Success $r.Output
         $saved = [IO.File]::ReadAllText($statePath) | ConvertFrom-Json
         $id = $saved.approvals[0].id
@@ -127,7 +127,7 @@ try {
     Ensure-HarnessDirectory $ghState
     $env:HARNESS_TEST_GH_STATE = $ghState
     $env:HARNESS_GH_PATH = Join-Path $testRoot 'fake-gh.ps1'
-    Write-Utf8File (Join-Path $ghState 'pr.json') (@{number=1; url='https://example.invalid/pr/1'; state='OPEN'; isDraft=$false; headRefName='codex/test/candidate'; headRefOid=$head; baseRefName='main'} | ConvertTo-Json)
+    Write-Utf8File (Join-Path $ghState 'pr.json') (@{number=1; url='https://example.invalid/pr/1'; state='OPEN'; isDraft=$false; headRefName='test/candidate'; headRefOid=$head; baseRefName='main'} | ConvertTo-Json)
     Write-Utf8File $env:HARNESS_GH_PATH @'
 if ($args[0] -eq 'pr' -and $args[1] -eq 'view') { Get-Content -Raw -LiteralPath (Join-Path $env:HARNESS_TEST_GH_STATE 'pr.json'); exit 0 }
 if ($args[0] -eq 'pr' -and $args[1] -eq 'checks') { '[{"name":"Harness CI","bucket":"pass"}]'; exit 0 }
@@ -137,7 +137,7 @@ exit 1
     Test-Case 'PR merge rejects a foreign approval before calling merge' {
         $old = $approval.source_branch
         try {
-            $approval.source_branch = 'codex/test/other'
+            $approval.source_branch = 'test/other'
             Write-FixtureState
             $r = Run-Child (Join-Path $PSScriptRoot 'merge_pr_if_allowed.ps1') @('-RepositoryRoot', $fixture, '-PullRequest', '1', '-ApprovalId', 'approval-fixture')
             Assert-True (-not $r.Success) 'PR merge accepted foreign approval'
@@ -155,7 +155,7 @@ exit 1
         # Ignore fixture runtime files so rejection is due to authorization, not dirtiness.
         Write-Utf8File (Join-Path $fixture '.git/info/exclude') "*`n"
         Write-FixtureState
-        $r = Run-Child (Join-Path $PSScriptRoot 'merge_authorized_branch.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'codex/test/candidate', '-TargetBranch', 'main')
+        $r = Run-Child (Join-Path $PSScriptRoot 'merge_authorized_branch.ps1') @('-RepositoryRoot', $fixture, '-SourceBranch', 'test/candidate', '-TargetBranch', 'main')
         Assert-True (-not $r.Success) 'unauthorized local merge accepted'
         Assert-True ($r.Output.Contains('merge requires an authorization')) 'merge failed for an unrelated reason'
         Assert-True ((Invoke-HarnessProcess git @('-C', $fixture, 'rev-parse', 'HEAD')).Output.Trim() -eq $head) 'merge changed HEAD'

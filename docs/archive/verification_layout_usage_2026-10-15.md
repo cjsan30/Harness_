@@ -52,4 +52,4 @@
 
 ## 미검증 및 제한
 
-실제 유료 Codex/Claude, 구독 한도, 청구 금액, GitHub API/merge, 원격 CI, Docker 실행, WSL/Linux, 네트워크 파일시스템은 이번 결과에 포함하지 않습니다. 실행 중 강제 timeout이나 process-tree 종료도 구현하지 않았습니다. 기존 ledger 이전 실행은 소급 집계하지 않습니다. 상세 운영 경계는 [사용량 정책](execution_usage.md), [배치 지원](layout_support.md), [복구 설계](recovery_design.md)에 있습니다.
+실제 유료 Codex/Claude, 구독 한도, 청구 금액, GitHub API/merge, 원격 CI, Docker 실행, WSL/Linux, 네트워크 파일시스템은 이번 결과에 포함하지 않습니다. 실행 중 강제 timeout이나 process-tree 종료도 구현하지 않았습니다. 기존 ledger 이전 실행은 소급 집계하지 않습니다. 상세 운영 경계는 [사용량 정책](../execution_usage.md), [배치 지원](../layout_support.md), [복구 설계](../recovery_design.md)에 있습니다.

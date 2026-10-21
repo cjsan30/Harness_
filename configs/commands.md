@@ -184,14 +184,18 @@ worker exit requirements and snapshot scope. In a standalone target omit `harnes
 
 - install hooks
   - `pwsh -NoProfile -File harness/scripts/install_git_hooks.ps1`
-- feature gate
+- feature gate (before pushing `<owner>/<task>`; add `-AllowCommittedHead` for a committed head)
   - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature`
+- engine repository self gate (used by `.harness/self_workflow.json`; `-Stage feature|integration|final`)
+  - `pwsh -NoProfile -File scripts/run_self_gate.ps1 -Stage integration`
 - integration gate
   - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage integration`
 - final gate
   - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage final`
 - bootstrap gate
   - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage bootstrap`
+- approve deleting an unmerged remote feature/test branch (then `git push origin --delete <branch>`)
+  - `pwsh -NoProfile -File harness/scripts/approve_branch_deletion.ps1 -Branch <branch> -Approver <name> -Reason <why>`
 - git workflow audit
   - `pwsh -NoProfile -File harness/scripts/audit_git_workflow.ps1`
 - authorize feature to dev

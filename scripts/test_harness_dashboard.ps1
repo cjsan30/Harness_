@@ -140,7 +140,7 @@ foreach($layout in @('standalone','nested')){
     }
     Test-Case "$layout cycle duplicate section keys and approvals are read correctly" {
         Write-Utf8File (Join-Path $eng 'reports/latest_report.md') "## Summary`n- status: fail`n## Results`n- build: pass`n- unit: fail`n- integration: not_run`n- benchmark_smoke: not_run`n## Logs`n- build: secret-output.log`n- unit: secret-unit.log`n"
-        Write-Utf8File (Join-Path $eng 'state/git_workflow/state.json') '{"approvals":[{"id":"approval-1","status":"requested","source_branch":"codex/test/example","target_branch":"main","requested_at":"2026-10-15T00:00:00Z"}]}'
+        Write-Utf8File (Join-Path $eng 'state/git_workflow/state.json') '{"approvals":[{"id":"approval-1","status":"requested","source_branch":"test/example","target_branch":"main","requested_at":"2026-10-15T00:00:00Z"}]}'
         $s=Snapshot $root
         Assert-True ($s.validation.scope -eq 'last_completed_cycle' -and $s.validation.steps[0].status -eq 'pass' -and $s.validation.steps[1].status -eq 'fail' -and $s.summary.approval_requests -eq 1) 'cycle/approval parsing incorrect'
         Assert-True (-not ($s|ConvertTo-Json -Depth 20).Contains('secret-output.log')) 'raw log path exposed'

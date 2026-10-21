@@ -320,7 +320,8 @@ if ($issues.Count -eq 0) {
     }
 
     if ($null -ne $gitWorkflow) {
-        foreach ($gitKey in @("hooks_path", "state_file", "reports_dir", "bootstrap_branch", "main_branch", "dev_branch", "feature_branch_prefix", "test_branch_prefix")) {
+        # feature_branch_prefix may be empty: feature branches are then <owner>/<task>.
+        foreach ($gitKey in @("hooks_path", "state_file", "reports_dir", "bootstrap_branch", "main_branch", "dev_branch", "test_branch_prefix")) {
             $value = Get-ProjectObjectProperty -Object $gitWorkflow -Name $gitKey
             if ([string]::IsNullOrWhiteSpace($value)) {
                 Add-Issue ("git_workflow." + $gitKey + " is empty")
@@ -342,6 +343,20 @@ if ($issues.Count -eq 0) {
             $configuredFeaturePrefix -ne $configuredTestPrefix -and
             $configuredFeaturePrefix.StartsWith($configuredTestPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
             Add-Issue "git_workflow.test_branch_prefix must not be a broader prefix of git_workflow.feature_branch_prefix"
+        }
+
+        # With an empty feature prefix an owner named like a protected branch or the
+        # test prefix would make <owner>/<task> ambiguous.
+        if ($null -ne $owners) {
+            $reservedNames = @($configuredMainBranch, $configuredDevBranch, ($configuredTestPrefix.TrimEnd('/') -split '/')[0]) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            foreach ($ownerProperty in $owners.PSObject.Properties) {
+                $candidateBranchRoot = ($configuredFeaturePrefix + $ownerProperty.Name)
+                foreach ($reservedName in $reservedNames) {
+                    if ([string]::Equals($candidateBranchRoot, $reservedName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                        Add-Issue ("owners." + $ownerProperty.Name + " collides with reserved branch name '" + $reservedName + "'")
+                    }
+                }
+            }
         }
 
         $hooksPath = $null

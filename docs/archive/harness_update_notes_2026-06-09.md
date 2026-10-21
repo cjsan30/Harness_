@@ -260,4 +260,4 @@ macOS, Windows, Linux/WSL을 모두 고려하되 실행 기준은 Linux/WSL에�
 ## 현재 개발 상태
 
 이 문서는 재사용 가능한 Harness 기능의 변경 이력만 유지합니다.
-현재 범위와 개선 과제는 [current_state.md](current_state.md), 구현 전체 목록은 [feature_inventory.md](feature_inventory.md)를 참고하세요.
+현재 범위와 개선 과제는 [current_state.md](../current_state.md), 구현 전체 목록은 [feature_inventory.md](../feature_inventory.md)를 참고하세요.

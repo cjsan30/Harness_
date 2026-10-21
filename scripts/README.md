@@ -210,7 +210,7 @@ Live seed handoff defaults to:
 - retry a failed worker assignment up to 3 attempts
 - continue to later assignments unless `-StopOnWorkerFailure` is set
 - automatically advance all-passing feature branches through `dev`
-- create a final `codex/test/*` candidate and request `main` approval
+- create a final `test/*` candidate and request `main` approval
 - stop before `main` approval/merge; that step remains manual
 
 ## Validation Artifacts
@@ -282,7 +282,7 @@ pwsh -NoProfile -File harness/scripts/install_git_hooks.ps1
 
 Required gate flow:
 
-1. On `codex/<owner>/<task>`, seal the candidate tree and run:
+1. On `<owner>/<task>`, commit freely; before pushing, seal the candidate tree and run (add `-AllowCommittedHead` for an already committed head):
 
 ```powershell
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature
@@ -296,7 +296,7 @@ pwsh -NoProfile -File harness/scripts/authorize_branch_promotion.ps1 -SourceBran
 pwsh -NoProfile -File harness/scripts/merge_authorized_branch.ps1 -SourceBranch <feature-branch> -TargetBranch dev
 ```
 
-3. On `codex/test/<candidate>`, run the final gate and approval flow:
+3. On `test/<candidate>`, run the final gate and approval flow:
 
 ```powershell
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage final

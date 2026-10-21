@@ -1,7 +1,9 @@
+> 보관본 (2026-10-20): 더 이상 갱신하지 않습니다. 현재 상태와 다음 작업은 [current_state.md](../current_state.md)를 보세요.
+
 # 다음 세션 시작 프롬프트
 
 최신 범위는 로컬 조회 현황판 구현과 대화·수정 이력의 문서화입니다.
-[세션 인계](SESSION_HANDOFF.md), [후속 대화·수정 기록](conversation_history_2026-10-15.md),
+[세션 인계](session_handoff_2026-10-15.md), [후속 대화·수정 기록](conversation_history_2026-10-15.md),
 [현황판 검증](verification_dashboard_2026-10-15.md)의 최신 상태를 우선합니다.
 사용자는 핵심 개선을 보류하고 현황판 구현을 승인했습니다. 다음에는 현황판 피드백을 먼저 반영합니다.
 

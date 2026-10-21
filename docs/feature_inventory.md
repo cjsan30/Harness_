@@ -1,6 +1,6 @@
 # Harness 구현 기능 전체 목록
 
-현재 소스에 존재하는 기능을 분류한 목록입니다. **29개 기능군, PowerShell 86개와 shell 20개로 구성된 스크립트 106개**, 추가 Python 2개·브라우저 회귀 JS 1개, Git hook 템플릿 4종을 포함합니다.
+현재 소스에 존재하는 기능을 분류한 목록입니다. **29개 기능군, PowerShell 89개와 shell 19개로 구성된 스크립트 108개**, 추가 Python 2개·브라우저 회귀 JS 1개, Git hook 템플릿 4종을 포함합니다.
 
 구현 존재와 검증 완료는 다릅니다. 현재 개발 저장소에는 활성 대상 프로필이 없으며 알려진 결함은 [현재 상태](current_state.md)에 기록되어 있습니다. 생성 파일 감사는 일부 항목에서 필수 문자열 존재를 확인하는 수준입니다.
 
@@ -56,7 +56,6 @@ build → unit → integration → benchmark smoke 순서로 실행하고 실패
 | [run_unit.sh](../scripts/run_unit.sh) | 프로필 기반 unit 실행 및 preview |
 | [run_integration.sh](../scripts/run_integration.sh) | 프로필 기반 integration 실행 및 preview |
 | [run_benchmark_smoke.sh](../scripts/run_benchmark_smoke.sh) | 프로필 기반 benchmark smoke 실행 및 preview |
-| [resolve_make.sh](../scripts/resolve_make.sh) | 기존 호출자용 make 실행기 탐색; 새 wrapper에서는 미사용 |
 
 ## 6. 실패 분석 및 재시도
 
@@ -106,7 +105,10 @@ feature/integration/final/bootstrap gate, 보호 브랜치 정책, 검증 tree �
 | [install_git_hooks.ps1](../scripts/install_git_hooks.ps1) | hook 템플릿 설치와 core.hooksPath 설정 |
 | [assert_git_action_allowed.ps1](../scripts/assert_git_action_allowed.ps1) | commit/push/merge/rebase의 정책 및 관련 증거 검사 |
 | [audit_git_workflow.ps1](../scripts/audit_git_workflow.ps1) | 브랜치·검증·승격·승인 상태 감사 |
-| [run_git_gate.ps1](../scripts/run_git_gate.ps1) | feature/integration/final/bootstrap 검증 및 증거 기록 |
+| [run_git_gate.ps1](../scripts/run_git_gate.ps1) | feature/integration/final/bootstrap 검증 및 증거 기록. 명령은 설정에서만 읽고 make·pwsh 대체 실행 없음 |
+| [approve_branch_deletion.ps1](../scripts/approve_branch_deletion.ps1) | 병합되지 않은 feature/test 원격 브랜치 삭제에 대한 사용자 승인 기록(저장소·remote·브랜치·head 결합). main/dev는 거부 |
+| [run_self_gate.ps1](../scripts/run_self_gate.ps1) | 엔진 저장소 자체 gate: feature는 PS5.1·PS7 구문 검사, integration은 두 런타임 전체 회귀, final은 여기에 현황판 HTTP 회귀 추가 |
+| [.harness/self_workflow.json](../.harness/self_workflow.json) | 프로필이 없는 엔진 저장소 전용 Git 정책(owner·gate 명령). 엔진이 저장소 루트에 있을 때만 사용 |
 | [bootstrap_initial_commit.ps1](../scripts/bootstrap_initial_commit.ps1) | 최초 커밋 계획, 검증·승인 및 명시적 커밋/푸시 옵션 |
 | [request_main_merge_approval.ps1](../scripts/request_main_merge_approval.ps1) | main 통합 후보에 대한 승인 요청 기록 |
 | [set_main_merge_approval.ps1](../scripts/set_main_merge_approval.ps1) | 승인 요청의 승인/거절 상태 기록 |
@@ -250,6 +252,7 @@ JSON 프로필과 Markdown 상태, UTF-8 쓰기, 경로 제한, 프로세스 실
 | --- | --- |
 | [test_harness.ps1](../scripts/test_harness.ps1) | PowerShell 구문·JSON 검사와 안전성 테스트의 공통 진입점 |
 | [test_harness_safety.ps1](../scripts/test_harness_safety.ps1) | 격리 Git 저장소, fake GitHub CLI, 별도 프로세스로 승인·민감정보·잠금·원자적 저장 검증 |
+| [test_git_workflow_policy.ps1](../scripts/test_git_workflow_policy.ps1) | 브랜치 이름 기본값, 자체 정책 적용 범위, gate 명령 fail-closed, 커밋 규칙, 병합된 브랜치 원격 삭제·승인된 미병합 브랜치 삭제 검증 |
 | [test_lock_child.ps1](../scripts/test_lock_child.ps1) | 강제 종료·동시 잠금 테스트 전용 자식 프로세스 |
 | [intake_safety.ps1](../scripts/intake_safety.ps1) | 민감정보 구역에서 변수 이름만 전달하고 다른 구역의 흔한 credential 패턴 차단 |
 
@@ -319,7 +322,7 @@ host·usage ledger·완료 증거·복구에 연결했습니다. exit 0인 명�
 | [test_harness_shell.ps1](../scripts/test_harness_shell.ps1) | 다른 격리 프로젝트의 실제 Node CLI 유닛·통합·보안 회귀 |
 | [test_harness_entrypoints.ps1](../scripts/test_harness_entrypoints.ps1) | PowerShell 직접 호출·CMD·Bash의 실제 인자/경로/preview/종료 코드/사이클 비교; Linux에서는 native PowerShell·Bash |
 
-기본 make fallback과 알 수 없는 인자 무시를 제거했습니다. [명령 계약과 전환](shell_commands.md), [실제 전후 비교](verification_shell_2026-10-15.md)를 참고하세요.
+기본 make fallback과 알 수 없는 인자 무시를 제거했습니다. [명령 계약과 전환](shell_commands.md), [실제 전후 비교](archive/verification_shell_2026-10-15.md)를 참고하세요.
 
 ## 29. 로컬 조회 현황판
 
@@ -343,5 +346,5 @@ host·usage ledger·완료 증거·복구에 연결했습니다. exit 0인 명�
 - 실제 Codex 실행, 원격 PR/ruleset, Telegram, Docker는 각각 설치·인증·환경 구성이 필요합니다.
 - build/unit/integration/benchmark의 실제 내용은 대상 프로필이 정합니다. Harness에 모든 프로젝트의 테스트가 내장된 것은 아닙니다.
 - smoke 테스트의 fake worker/API 통과는 실제 Codex 또는 GitHub 실행의 검증과 같지 않습니다.
-- 승인 범위와 intake 민감정보 복사 경로는 회귀 테스트와 함께 수정했습니다. 핵심 독립/이식 경로·shell 명령 통일 및 사용량/다음 실행 제한을 추가했습니다. Windows·WSL2 Ubuntu의 [실제 플랫폼 검증](verification_platforms_2026-10-15.md)을 수행했으며 금액 예산, 실행 중 timeout, 별도 Linux 배포판·원격 CI는 남아 있습니다.
+- 승인 범위와 intake 민감정보 복사 경로는 회귀 테스트와 함께 수정했습니다. 핵심 독립/이식 경로·shell 명령 통일 및 사용량/다음 실행 제한을 추가했습니다. Windows·WSL2 Ubuntu의 [실제 플랫폼 검증](archive/verification_platforms_2026-10-15.md)을 수행했으며 금액 예산, 실행 중 timeout, 별도 Linux 배포판·원격 CI는 남아 있습니다.
 - 부모 종료 후 worker lease와 실행 기록으로 중복 실행을 차단합니다. 종료가 불명확한 자식 프로세스의 강제 정리, 네트워크 파일시스템 잠금은 제공·검증 범위 밖입니다.

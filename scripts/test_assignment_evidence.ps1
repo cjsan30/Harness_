@@ -149,7 +149,7 @@ Test-Case 'feature finalization rejects missing proof before touching Git' {
     Write-Utf8File (Join-Path $dirs.Done 'task__pass.md') "- assignment_id: task`n- status: done`n- result: pass`n"
     $before=Get-AssignmentCodeSnapshot $rootDir $rootDir
     $rejection=''
-    try {Finalize-FeatureBranchForSeedAssignment 'tester' 'task' 'codex/tester/task'|Out-Null} catch {$rejection=$_.Exception.Message}
+    try {Finalize-FeatureBranchForSeedAssignment 'tester' 'task' 'tester/task'|Out-Null} catch {$rejection=$_.Exception.Message}
     Assert-True ($rejection -like '*no unique execution evidence*') 'finalization did not fail at the evidence guard'
     Assert-True (Test-AssignmentSnapshotEqual $before (Get-AssignmentCodeSnapshot $rootDir $rootDir)) 'finalization changed source or index'
 }
