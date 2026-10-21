@@ -21,12 +21,12 @@
 | 영역 | 상태 |
 | --- | --- |
 | 승인 범위 바인딩 (root/branch/head/target/stage) | 구현 |
-| intake 민감정보 복사 차단 | intake 경로만 구현. 런타임 로그 전반의 비밀값 마스킹은 미완 |
-| OS lease 잠금, durable worker intent, 별도 worker host | 구현. process-tree 강제 종료·네트워크 FS 검증 미완 |
+| 민감정보 | intake 복사 차단, worker·gate·cycle·검증 증거 로그 비밀값 마스킹(2026-10-21). retry prompt·보고서 경로는 미조사 |
+| OS lease 잠금, durable worker intent, 별도 worker host | 구현. 실행 1회 시간 초과 시 provider 트리 종료 구현(2026-10-21). host 비정상 종료 후 자동 종료·네트워크 FS 검증 미완 |
 | 원자적 저장, workflow 충돌 거부, 큐 전환 journal/복구 | 구현. 최초 assignment/packet 생성·외부 side effect 복구 미완 |
 | 독립/이식 경로 통일, shell 명령 계약 | 핵심 경로 구현 ([shell_commands.md](shell_commands.md), [layout_support.md](layout_support.md)) |
 | 실행 증거 기반 성공 판정 | 구현 ([assignment_evidence.md](assignment_evidence.md)) |
-| 실행별 사용량 기록, 다음 실행 제한 | 구현. 금액 예산·실행 중 timeout 미구현 ([execution_usage.md](execution_usage.md)) |
+| 실행별 사용량 기록, 다음 실행 제한 | 구현. 실행 1회 시간 상한 `max_invocation_seconds` 추가(2026-10-21). 금액 예산·실행 중 토큰 상한 미구현 ([execution_usage.md](execution_usage.md)) |
 | 단일 CLI `scripts/harness.ps1` | 구현 ([cli.md](cli.md)) |
 | Provider 계약 v1, Codex·Claude adapter | fixture로만 검증. 실제 유료 호출 미검증 ([provider_contract.md](provider_contract.md), [claude_adapter.md](claude_adapter.md)) |
 | 로컬 조회 현황판 | 구현 ([dashboard.md](dashboard.md)) |
@@ -64,6 +64,7 @@
 
 ## 5. 최근 변경
 
+- 2026-10-21: 실제 유료 실행 전 안전장치. (1) `execution_policy.max_invocation_seconds`: 실행 1회 시간 상한, worker host가 띄운 `worker_timeout_watchdog.ps1`이 초과 시 provider 프로세스 트리만 종료하고 host는 `timed_out`·exit 124·사용량 unknown으로 종료 확정. (2) `secret_redaction.ps1`: worker·gate·cycle·검증 증거 로그를 쓰기 전 비밀값 마스킹(사용량 수치 유지). 회귀: provider suite +2(실제 host로 60초 hang child를 3초에 종료, 정책 값 검증), safety suite +2(마스킹 패턴·환경 변수 값, gate 로그)
 - 2026-10-21: `install_github_ruleset.ps1`·`audit_github_policy.ps1`에 `-Branch`·`-ProtectionOnly` 추가(삭제·강제 push 금지만; main에는 거부; 같은 이름의 다른 브랜치 ruleset 덮어쓰기 거부). fake gh 회귀 4건 추가(정책 suite 15건). 실제 저장소에 dev ruleset 적용
 - 2026-10-21: 위 변경을 `manager-harness/p0-cleanup-git-policy`에서 커밋(`2e5be71`) → feature gate → integration gate(두 런타임 290/290) → 승격(`promotion_20261021_170902_738_ac3ce25c`) → 승인된 merge로 로컬 `dev` 반영(`60df7c5`). 미병합 원격 브랜치 삭제용 `approve_branch_deletion.ps1` 추가. push 안 함
 - 2026-10-21: Git 정책 개편. 브랜치 이름 `<owner>/<task>`·`test/<candidate>`(AI 접두사 제거, 프로필에 `codex/`를 명시한 대상은 그대로 동작). 커밋은 보호 브랜치만 차단하고 feature gate는 push 시점에 요구. 병합된 feature/test 원격 브랜치 삭제 허용, 미병합 브랜치는 사용자 승인(`approve_branch_deletion.ps1`, head 결합) 또는 GitHub 화면에서 직접 삭제(`main`·`dev` 삭제는 차단). gate 명령의 `make integration`·`pwsh` 대체 실행 제거(미설정 시 fail closed). preflight가 빈 feature 접두사 허용, 예약 이름과 겹치는 owner 거부. 엔진 전용 정책 `.harness/self_workflow.json`과 `scripts/run_self_gate.ps1`(feature: 두 런타임 구문, integration: 두 런타임 전체 회귀, final: + 현황판 HTTP) 추가. CI workflow 수정(matrix를 `shell`에 쓰던 오류, `Harness CI` 집계 job 추가). hook 설치. 회귀 PS5.1·PS7 각 289/289

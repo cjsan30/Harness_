@@ -30,6 +30,32 @@ try {
     $executable = $record.executable
     if ($null -eq (Get-Command $executable -ErrorAction SilentlyContinue)) { throw 'recorded worker executable is unavailable' }
     $workerArguments = @($record.arguments)
+    # Per-invocation wall-clock limit. The watchdog stops only the provider tree;
+    # this host survives to record a confirmed exit.
+    $timeoutSeconds = $null
+    if ($null -ne $record.PSObject.Properties['timeout_seconds']) { $timeoutSeconds = $record.timeout_seconds }
+    $timeoutMarker = $paths.Record + '.timeout'
+    $doneMarker = $paths.Record + '.done'
+    foreach ($marker in @($timeoutMarker, $doneMarker)) { if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force } }
+    $watchdog = $null
+    if ($null -ne $timeoutSeconds) {
+        $watchdogArguments = @('-NoProfile')
+        if (Test-HarnessIsWindows) { $watchdogArguments += @('-ExecutionPolicy', 'Bypass') }
+        $watchdogArguments += @('-File', (Join-Path $PSScriptRoot 'worker_timeout_watchdog.ps1'), '-HostPid', [string]$PID, '-HostStartedAt', $record.worker_started_at, '-TimeoutSeconds', [string]$timeoutSeconds, '-TimeoutMarker', $timeoutMarker, '-DoneMarker', $doneMarker)
+        # ProcessStartInfo, not Start-Process: a working directory with [ ] would be
+        # treated as a wildcard, and inherited std handles would hold the parent's pipe.
+        $startInfo = New-Object Diagnostics.ProcessStartInfo
+        $startInfo.FileName = Get-HarnessPowerShellExecutable
+        $startInfo.Arguments = ($watchdogArguments | ForEach-Object { '"' + ([string]$_).Replace('"', '\"') + '"' }) -join ' '
+        $startInfo.WorkingDirectory = $PSScriptRoot
+        $startInfo.UseShellExecute = $false
+        $startInfo.CreateNoWindow = $true
+        $startInfo.RedirectStandardInput = $true
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $watchdog = [Diagnostics.Process]::Start($startInfo)
+        $watchdog.StandardInput.Close()
+    }
     $duration = [Diagnostics.Stopwatch]::StartNew()
     $previousOutputEncoding=$OutputEncoding
     $previousConsoleEncoding=[Console]::OutputEncoding
@@ -40,10 +66,20 @@ try {
         $OutputEncoding=New-Object System.Text.UTF8Encoding($false)
         [Console]::OutputEncoding=$OutputEncoding
         $global:LASTEXITCODE = 0
-        $prompt | & $executable @workerArguments 2>&1 | ForEach-Object { Append-Utf8File $logFile ($_.ToString()) -ErrorAction Stop }
+        $prompt | & $executable @workerArguments 2>&1 | ForEach-Object { Append-Utf8File $logFile (Protect-HarnessSecretText $_.ToString()) -ErrorAction Stop }
         $code = $LASTEXITCODE
     } finally { $ErrorActionPreference = 'Stop'; $OutputEncoding=$previousOutputEncoding; [Console]::OutputEncoding=$previousConsoleEncoding; Pop-Location }
     $duration.Stop()
+    if ($null -ne $watchdog) {
+        [IO.File]::WriteAllText($doneMarker, [DateTime]::UtcNow.ToString('o'))
+        if (-not $watchdog.WaitForExit(15000)) { try { $watchdog.Kill() } catch {} }
+    }
+    if (Test-Path -LiteralPath $timeoutMarker) {
+        # Fail closed even if the provider exited at the same moment: 124 matches timeout(1).
+        $code = 124
+        $record | Add-Member -NotePropertyName timed_out -NotePropertyValue $true -Force
+        Append-Utf8File $logFile "Harness: worker exceeded max_invocation_seconds=$timeoutSeconds; provider process tree stopped."
+    }
     $providerResult=Get-HarnessProviderResult $record $logFile $code
     Complete-HarnessUsageReservation $RootDir $record $logFile $code $duration.Elapsed.TotalSeconds $providerResult
     $record|Add-Member -NotePropertyName provider_result -NotePropertyValue $providerResult -Force

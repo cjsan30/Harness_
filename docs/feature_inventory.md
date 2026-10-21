@@ -1,6 +1,6 @@
 # Harness 구현 기능 전체 목록
 
-현재 소스에 존재하는 기능을 분류한 목록입니다. **29개 기능군, PowerShell 89개와 shell 19개로 구성된 스크립트 108개**, 추가 Python 2개·브라우저 회귀 JS 1개, Git hook 템플릿 4종을 포함합니다.
+현재 소스에 존재하는 기능을 분류한 목록입니다. **29개 기능군, PowerShell 91개와 shell 19개로 구성된 스크립트 110개**, 추가 Python 2개·브라우저 회귀 JS 1개, Git hook 템플릿 4종을 포함합니다.
 
 구현 존재와 검증 완료는 다릅니다. 현재 개발 저장소에는 활성 대상 프로필이 없으며 알려진 결함은 [현재 상태](current_state.md)에 기록되어 있습니다. 생성 파일 감사는 일부 항목에서 필수 문자열 존재를 확인하는 수준입니다.
 
@@ -276,6 +276,8 @@ JSON 프로필과 Markdown 상태, UTF-8 쓰기, 경로 제한, 프로세스 실
 | [hook_bootstrap.sh](../scripts/hook_bootstrap.sh) | main checkout 및 isolated worktree의 공유 정책 루트 |
 | [test_harness_layout.ps1](../scripts/test_harness_layout.ps1) | 두 배치의 한글·공백·대괄호 경로, 실제 hook/cycle, fake worker 및 생성 파일 검증 |
 | [execution_usage.ps1](../scripts/execution_usage.ps1) | 실행 전 예약, JSONL 사용량·실행 시간·시도 이력, 공통 lease 안에서 정책 검사 |
+| [worker_timeout_watchdog.ps1](../scripts/worker_timeout_watchdog.ps1) | `max_invocation_seconds` 초과 시 timeout 기록 후 worker host의 하위 프로세스 트리만 종료. host PID 시작 시각 확인 |
+| [secret_redaction.ps1](../scripts/secret_redaction.ps1) | worker·gate·cycle·검증 증거 로그를 쓰기 전 비밀값을 `[REDACTED]`로 마스킹. 사용량 수치는 유지 |
 | [get_execution_usage.ps1](../scripts/get_execution_usage.ps1) | 보존된 전체 실행의 합계와 실행별 JSON 조회 |
 | [test_execution_usage.ps1](../scripts/test_execution_usage.ps1) | 미확인 사용량, 손상 기록, 한도·경쟁 예약 및 조회 명령 회귀 |
 

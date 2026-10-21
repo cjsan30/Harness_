@@ -124,6 +124,64 @@ $global:LASTEXITCODE=0
         }finally{$env:CODEX_HARNESS_ROOT=$oldRoot;$env:HARNESS_CODEX_PATH=$oldPath;$env:CODEX_GIT_WORKSPACE_ROOT=$oldWorkspace}
     }
 }
+Case integration 'worker exceeding max_invocation_seconds is stopped and recorded as a failed exit' {
+    $profile=[IO.File]::ReadAllText((Join-Path $source 'configs/project_profile.template.json'))|ConvertFrom-Json
+    $profile.execution_policy.max_invocation_seconds=3
+    $root=Fixture $profile
+    foreach($dir in @('scripts','configs')){Copy-Item -LiteralPath (Join-Path $source $dir) -Destination (Join-Path $root ('harness/'+$dir)) -Recurse}
+    Invoke-HarnessProcess git @('init','-b','main',$root)|Out-Null
+    Write-Utf8File (Join-Path $root 'baseline.txt') 'fixture'
+    Invoke-HarnessProcess git @('-C',$root,'add','baseline.txt')|Out-Null
+    Invoke-HarnessProcess git @('-C',$root,'-c','core.hooksPath=','-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','fixture')|Out-Null
+    $dirs=Get-AssignmentDirectories $root 'tester'
+    Write-Utf8File (Join-Path $dirs.Inbox 'task.md') "- assignment_id: task`n- status: inbox`n- result: pending`n- validation: git cat-file -e HEAD:baseline.txt`n"
+    Write-Utf8File (Join-Path $root 'harness/reports/dispatch_packets/task.md') 'isolated provider test'
+    $childPidFile=Join-Path $root 'child.pid'
+    $fake=Join-Path $root 'fake-provider.ps1'
+    # The fake provider is a script run inside the worker host; the hung work is a real
+    # child process, like the node process behind the Codex CLI.
+    Write-Utf8File $fake (@'
+if($args -contains '--version'){'fake provider';return}
+. (Join-Path $env:CODEX_HARNESS_ROOT 'harness/scripts/harness_common.ps1')
+'OPENAI_API_KEY=sk-fixtureTimeoutSecret1234567890'
+'{"type":"turn.started"}'
+$info=New-Object Diagnostics.ProcessStartInfo
+$info.FileName=Get-HarnessPowerShellExecutable;$info.Arguments='-NoProfile -Command "Start-Sleep -Seconds 60"'
+$info.WorkingDirectory=[IO.Path]::GetTempPath();$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+$child=[Diagnostics.Process]::Start($info)
+[IO.File]::WriteAllText('__CHILD_PID__',[string]$child.Id)
+$child.WaitForExit()
+$global:LASTEXITCODE=0
+'@).Replace('__CHILD_PID__',$childPidFile)
+    $oldRoot=$env:CODEX_HARNESS_ROOT;$oldPath=$env:HARNESS_CODEX_PATH;$oldWorkspace=$env:CODEX_GIT_WORKSPACE_ROOT
+    try{
+        $env:CODEX_HARNESS_ROOT=$root;$env:HARNESS_CODEX_PATH=$fake;$env:CODEX_GIT_WORKSPACE_ROOT=$null
+        $timer=[Diagnostics.Stopwatch]::StartNew()
+        $r=Invoke-HarnessPowerShellFile (Join-Path $PSScriptRoot 'invoke_assignment_codex.ps1') @('-Agent','tester','-AssignmentId','task','-Model','fixture-model') -AllowFailure
+        $timer.Stop()
+        $worker=Get-AssignmentWorkerRecord $root 'task';$ledger=@(Read-HarnessUsageRecords $root)[0]
+        Assert-True ($timer.Elapsed.TotalSeconds -lt 45) "timeout did not stop the worker: $($timer.Elapsed.TotalSeconds)s"
+        Assert-True ($worker.timeout_seconds -eq 3 -and $worker.timed_out -eq $true -and $worker.exit_code -eq 124) "timeout not recorded: $($worker|ConvertTo-Json -Depth 4)"
+        Assert-True ($worker.provider_result.execution_status -eq 'failed' -and $worker.provider_result.error_kind -eq 'process_exit') 'timed out run was not a failed provider result'
+        Assert-True ($ledger.status -eq 'completed' -and $ledger.usage.status -eq 'unknown' -and $null -eq $ledger.usage.input_tokens) 'timed out usage was not unknown'
+        Assert-True ([IO.File]::ReadAllText((Resolve-ProjectPath $root $worker.log_file 'log')).Contains('exceeded max_invocation_seconds=3')) 'timeout not written to the worker log'
+        Assert-True (-not [IO.File]::ReadAllText((Resolve-ProjectPath $root $worker.log_file 'log')).Contains('fixtureTimeoutSecret')) 'provider output secret reached the worker log'
+        $childPid=[int][IO.File]::ReadAllText($childPidFile)
+        Assert-True ($null -eq (Get-Process -Id $childPid -ErrorAction SilentlyContinue)) 'hung provider child process survived'
+        Assert-True (-not $r.Success) 'timed out assignment reported success'
+    }finally{$env:CODEX_HARNESS_ROOT=$oldRoot;$env:HARNESS_CODEX_PATH=$oldPath;$env:CODEX_GIT_WORKSPACE_ROOT=$oldWorkspace}
+}
+Case unit 'max_invocation_seconds accepts null or a positive integer only' {
+    foreach($bad in @(0,-1,'30',1.5)){
+        $profile=[IO.File]::ReadAllText((Join-Path $source 'configs/project_profile.template.json'))|ConvertFrom-Json
+        $profile.execution_policy.max_invocation_seconds=$bad
+        $root=Fixture $profile
+        Reject {Get-HarnessExecutionPolicy $root}
+    }
+    $profile=[IO.File]::ReadAllText((Join-Path $source 'configs/project_profile.template.json'))|ConvertFrom-Json
+    $profile.execution_policy.max_invocation_seconds=600
+    Assert-True ((Get-HarnessExecutionPolicy (Fixture $profile)).max_invocation_seconds -eq 600) 'valid limit rejected'
+}
 Write-Utf8File (Join-Path $testRoot 'results.json') ($results.ToArray()|ConvertTo-Json -Depth 8)
 $failed=@($results|Where-Object{-not $_.passed}).Count
 Write-Output "Provider results: $($results.Count-$failed)/$($results.Count) passed; artifacts: $testRoot"

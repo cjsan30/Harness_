@@ -1,5 +1,6 @@
 # Local accounting for launches made by this Harness. This is not a provider
-# billing ledger, an account quota reader, or an in-flight process kill switch.
+# billing ledger or an account quota reader. The only in-flight control is the
+# per-invocation wall-clock limit (max_invocation_seconds) enforced by the worker host.
 function Test-HarnessUsageInteger($Value) {
     return ($null -ne $Value -and ($Value -is [int] -or $Value -is [long]) -and $Value -ge 0)
 }
@@ -8,7 +9,7 @@ function Get-HarnessExecutionPolicy([string]$RootDir) {
     # Read fresh while holding the accounting lock: profile caching must not hide
     # a newly tightened policy in a long-lived dispatch process.
     $profile = [IO.File]::ReadAllText((Get-ProjectProfilePath $RootDir)) | ConvertFrom-Json
-    $policy = [ordered]@{ billing_mode='unknown'; max_invocations=$null; max_attempts_per_assignment=$null; max_concurrent_workers=$null; max_total_tokens=$null; max_total_duration_seconds=$null }
+    $policy = [ordered]@{ billing_mode='unknown'; max_invocations=$null; max_attempts_per_assignment=$null; max_concurrent_workers=$null; max_total_tokens=$null; max_total_duration_seconds=$null; max_invocation_seconds=$null }
     if ($null -ne $profile.execution_policy) {
         foreach ($property in $profile.execution_policy.PSObject.Properties) {
             if (-not $policy.Contains($property.Name)) { throw "unknown execution policy field: $($property.Name)" }
@@ -19,6 +20,8 @@ function Get-HarnessExecutionPolicy([string]$RootDir) {
     foreach ($name in @('max_invocations','max_attempts_per_assignment','max_concurrent_workers','max_total_tokens','max_total_duration_seconds')) {
         if ($null -ne $policy[$name] -and -not (Test-HarnessUsageInteger $policy[$name])) { throw "execution policy $name must be null or a nonnegative integer" }
     }
+    # A running worker is stopped after this many seconds; 0 would kill every run, so it is refused.
+    if ($null -ne $policy.max_invocation_seconds -and (-not (Test-HarnessUsageInteger $policy.max_invocation_seconds) -or $policy.max_invocation_seconds -lt 1)) { throw 'execution policy max_invocation_seconds must be null or a positive integer' }
     return [pscustomobject]$policy
 }
 

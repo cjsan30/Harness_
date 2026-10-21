@@ -133,7 +133,7 @@ function New-AssignmentValidationEvidence([string]$RootDir,[string]$Owner,[strin
     $timer=[Diagnostics.Stopwatch]::StartNew()
     try {
         $result=Invoke-AssignmentValidationCommand $workspace $command
-        Write-Utf8File $log $result.Output
+        Write-Utf8File $log (Protect-HarnessSecretText $result.Output)
         $evidence.exit_code=$result.ExitCode
         $evidence.log_sha256=Get-EvidenceFileHash $log
         $evidence.after=Get-AssignmentCodeSnapshot $RootDir $workspace

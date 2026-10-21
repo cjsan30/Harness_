@@ -25,7 +25,7 @@
 | 7 | 실제 실행 결과로 성공 판정 | 구현: 실제 validation 실행, code/HEAD/branch/index/log/assignment/invocation 연결, worker 종료·seed 승격 재검사. legacy pass는 미검증, 명시적 재검증 제공. 제품 의미상 정확성·악의적 로컬 위조·hermetic 환경 증명은 범위 밖 |
 | 8 | 중단·복구와 상태 저장 | 원자적 파일 교체·workflow 충돌 거부, 큐 전환 journal·반복 복구·확인된 worker 종료 조정 구현. 최초 assignment/packet 생성과 외부 side effect의 전 과정 복구는 남음 |
 | 9 | 작업별 사용량 측정 | invocation별 입력/캐시/출력 토큰·실행 시간·시도 기록 및 조회. Codex·Claude 수집 구현, 누락은 unknown/null. 실제 모델 판정·청구액은 남음 |
-| 10 | 예산·시간·재시도 제한 | 예약 lease로 총 실행/동시 실행/assignment 시도 제한, 누적 토큰·시간에 따른 다음 실행 차단. 돈 단위 예산·실행 중 timeout/process-tree 종료는 남음 |
+| 10 | 예산·시간·재시도 제한 | 예약 lease로 총 실행/동시 실행/assignment 시도 제한, 누적 토큰·시간에 따른 다음 실행 차단. 2026-10-21 실행 1회 시간 상한(`max_invocation_seconds`, watchdog이 provider 프로세스 트리 종료) 구현. 돈 단위 예산·실행 중 토큰 상한은 남음 |
 | 11 | 단일 실행 명령 | 구현: init/doctor/run/status/resume/usage/test/dashboard/help, JSON v1, exit 0/1/2, 무변경 Preview, 명시적 재개 실행. dashboard 서버는 URL을 즉시 출력하고 Snapshot은 조회 JSON 제공. 나머지 명령의 실시간 출력·일부 고급 옵션은 남음 |
 | 12 | Codex·Claude 어댑터 분리 | 두 adapter와 공통 요청/결과/usage v1 구현, worker/ledger/증거·복구 연결. 실패·incomplete Claude 결과·provider/model/ID 불일치 거부, 권한 우회 없음. 실제 유료 provider 검증은 남음 |
 | 13 | 작업 분해·완료 조건 표준화 | 일부 구현: 고유 ID/상태/결과/validation 필드와 실행 증거 계약. 전체 작업 schema·의존성 DAG·완료 조건 의미 검사는 대기 |
@@ -88,7 +88,7 @@ Intake 원본 파일의 내용을 지우거나 Git 이력을 정리하지는 않
 | 번호·우선순위 | 후속 구현 및 완료 판정 기준 |
 | --- | --- |
 | 1 · P0 승인 범위 | 구현된 범위 검사를 유지. 실제 GitHub 연결 시 승인 이후 head 변경·draft·실패 check·target 변경을 서버 환경에서 확인. 로컬 기록 변조 방지와 서버 권한은 별개로 명시 |
-| 2 · P0 민감정보 | worker stdout/stderr, retry prompt, report와 artifact로 값이 전달되는 경로 조사. 허용 필드·마스킹 정책을 정하고 가짜 credential 회귀 추가. 임의 문자열 탐지의 한계와 원본 intake 보존 정책 명시 |
+| 2 · P0 민감정보 | 2026-10-21 worker 실행 로그·gate 로그·cycle 단계 로그·검증 증거 로그 마스킹(`secret_redaction.ps1`)과 가짜 credential 회귀 추가. 남음: retry prompt·보고서·artifact 경로 조사, 허용 필드 정책, 원본 intake 보존 정책 명시 |
 | 3 · P0 잠금·소유권 | invocation ID와 프로세스 시작 시각을 이용해 부모/자식 수명 연결. 부모 종료 시 살아 있는 worker를 두고 중복 재실행하지 않도록 처리. PID 재사용·잘못된 프로세스 종료·두 복구자 경쟁 테스트. 네트워크 FS는 지원 또는 비지원 정책과 검증 근거 명시 |
 | 4 · P1 자체 테스트·CI | 현재 로컬 회귀 유지. 원격 CI를 실제 실행하고 OS별 결과 기록. 생성·실행·재개를 아우르는 격리 smoke 확대. 플랫폼 미실행은 skip/unverified로 보고 |
 | 5 · P1 경로 통일 | standalone 루트와 `<target>/harness`를 공통 함수로 해결. init/worker/hook/report에서 공백·한글·대괄호 경로 fixture 통과. 루트 탈출 차단 유지, 문서 명령도 두 배치에서 확인 |
