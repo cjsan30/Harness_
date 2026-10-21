@@ -71,7 +71,7 @@ try {
             $yaml=[IO.File]::ReadAllText((Join-Path $fixture '.github/workflows/harness-ci.yml'))
             if($layout -eq 'standalone'){Assert-True (-not $yaml.Contains('harness/scripts/')) 'generated CI has nested path'}
             $worktree=Join-Path $fixture 'isolated worktree [safe]'
-            Invoke-HarnessProcess git @('-C',$fixture,'worktree','add','-b','codex/test/layout',$worktree,'main') | Out-Null
+            Invoke-HarnessProcess git @('-C',$fixture,'worktree','add','-b','test/layout',$worktree,'main') | Out-Null
             $r=Invoke-HarnessProcess git @('-C',$worktree,'-c','user.name=Harness Test','-c','user.email=test@example.invalid','commit','--allow-empty','-m','must be blocked') -AllowFailure
             Assert-True (-not $r.Success) 'worktree protected commit accepted'
             Assert-True ($r.Output -match 'direct commits|blocked|protected') ("worktree hook failed before policy: " + $r.Output)

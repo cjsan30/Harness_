@@ -6,19 +6,21 @@ Protect commit, push, and merge operations so only a tested tree can move throug
 
 ## Protected Flow
 
-1. Work on a feature branch named `codex/<owner>/<task>`.
+1. Work on a feature branch named `<owner>/<task>` (`git_workflow.feature_branch_prefix` is empty by default; `<owner>` must be listed in `owners`).
    - live harness assignment branches are created from the repository baseline branch, not from whichever branch happens to be checked out
-2. Stage the candidate tree and keep it sealed: no unstaged files, no untracked files, no merge conflicts.
-3. Run the owner gate:
-   - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature`
-4. Commit and push the feature branch.
+   - commits on working branches are not gated; evidence is required when work leaves the branch (push, dev merge, main merge)
+2. Commit as often as needed. Before pushing, keep the candidate sealed: no unstaged files, no untracked files, no merge conflicts.
+3. Run the owner gate on the candidate:
+   - committed head: `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature -AllowCommittedHead`
+   - staged tree (commit after the gate): `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature`
+4. Push the feature branch. The push hook requires a passing feature gate for the exact head tree.
 5. Run the manager integration gate on the same feature branch:
    - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage integration`
 6. Authorize promotion into `dev`:
    - `pwsh -NoProfile -File harness/scripts/authorize_branch_promotion.ps1 -SourceBranch <feature-branch> -TargetBranch dev`
 7. Merge into `dev` through the authorized merge wrapper:
    - `pwsh -NoProfile -File harness/scripts/merge_authorized_branch.ps1 -SourceBranch <feature-branch> -TargetBranch dev`
-8. Create a dedicated final test branch named `codex/test/<candidate>` from `dev`.
+8. Create a dedicated final test branch named `test/<candidate>` from `dev`.
 9. Run the final full-cycle gate:
    - `pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage final`
 10. Request main merge approval:
@@ -60,23 +62,32 @@ Bootstrap flow:
 
 - Do not commit directly on `dev`.
 - Do not commit directly on `main`.
-- Do not commit directly on `codex/test/*`.
+- Do not commit directly on `test/*`.
+- Commits on other local branches are allowed without a gate.
 - Do not push a feature branch unless the current `HEAD` tree matches a passing `feature` gate.
+- Do not push branches whose names are outside the workflow (`main`, `dev`, `<owner>/<task>`, `test/<candidate>`).
+- Do not delete remote `main` or `dev`.
+- A remote feature or test branch may be deleted when its remote head is contained in `dev` or `main`, or when the user recorded a deletion approval for that exact head (abandoned or restarted work):
+  - `pwsh -NoProfile -File harness/scripts/approve_branch_deletion.ps1 -Branch <branch> -Approver <name> -Reason <why>`
+  - then `git push origin --delete <branch>`
+- The user can also delete a non-protected branch directly in the GitHub web UI; local hooks do not run there.
 - Do not push a test branch unless the current `HEAD` tree matches a passing `final` gate.
 - Do not merge into `dev` unless `feature` and `integration` gates passed for the exact source head.
 - Do not merge into `main` unless `final` passed, approval is `approved`, and the source head was explicitly authorized.
-- Do not merge a GitHub PR into `main` unless the PR source is the exact approved `codex/test/*` head and required PR checks are passing.
+- Do not merge a GitHub PR into `main` unless the PR source is the exact approved `test/*` head and required PR checks are passing.
 - Do not use destructive Git commands from harness automation.
 - Do not revert unrelated user changes.
 
 ## Enforcement
 
-- `.githooks/pre-commit` blocks commits that do not satisfy the branch rules.
-- `.githooks/pre-push` blocks pushes that do not satisfy the gate and promotion rules.
+- `.githooks/pre-commit` blocks direct commits on `main`, `dev`, and `test/*` (except the first bootstrap commit flow).
+- `.githooks/pre-push` blocks pushes that do not satisfy the gate and promotion rules, remote deletion of `main`/`dev`, and deletion of unmerged branches without a recorded user approval.
 - `.githooks/pre-merge-commit` blocks protected merges without promotion authorization. Use `merge_authorized_branch.ps1` for manual protected merges so the hook receives the intended source branch and source head.
 - `.githooks/pre-rebase` blocks rebases on protected branches.
 - `run_git_gate.ps1` rejects no-op or failure-masking validation commands such as `true`, `exit 0`, or `|| true`.
-- `open_pr_candidate.ps1` refuses to open a main PR unless the source is a dedicated `codex/test/*` branch with a passing final gate for the exact tree.
+- `open_pr_candidate.ps1` refuses to open a main PR unless the source is a dedicated `test/*` branch with a passing final gate for the exact tree.
+- `run_git_gate.ps1` takes stage commands only from configuration (`owners.<owner>.validation`, `commands.integration`, `commands.full_cycle`). There is no `make` or `pwsh` fallback; a missing command fails closed.
+- The engine repository itself has no project profile; its Git policy (owners and gate commands) is `.harness/self_workflow.json`, used only when no profile exists and the engine is at the repository root. Its gates run `scripts/run_self_gate.ps1`.
 - `check_pr_status.ps1` reads required PR checks through GitHub CLI.
 - `merge_pr_if_allowed.ps1` refuses draft, non-main, non-test-branch, stale-head, unapproved, or failing-check PRs before calling `gh pr merge --match-head-commit`.
 - `install_github_actions_workflow.ps1` writes a minimal GitHub Actions workflow that runs portable setup and the full harness cycle in CI mode.

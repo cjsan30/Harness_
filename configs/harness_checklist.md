@@ -74,8 +74,8 @@
 - PowerShell shell wrappers and Git hooks use writable XDG runtime directories outside the repository so runtime cache files do not dirty Git gate inputs
 - generated harness reports, state, and assignment queue files are ignored and not staged in the candidate tree
 - porting layout audit confirms the reusable harness lives under `harness/`, not unpacked into the repository root
-- feature branches use the `codex/<owner>/<task>` shape
-- final test branches use the `codex/test/<candidate>` shape
+- feature branches use the `<owner>/<task>` shape (empty `feature_branch_prefix`); no owner is named `main`, `dev`, or `test`
+- final test branches use the `test/<candidate>` shape
 - live subagent runs use assignment-specific feature branches
 - commit is blocked unless the exact tree passed the correct gate
 - push is blocked unless the current `HEAD` tree passed the correct gate

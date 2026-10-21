@@ -50,4 +50,4 @@ PowerShell 7에서 이전 구현의 실제 fixture `.test-output/5483b11a91e046e
 
 개발 checkout에는 활성 대상 프로필, remote, core.hooksPath를 추가하지 않았으며 첫 커밋도 만들지 않았습니다. fixture 안의 저장소·hook·커밋만 테스트에 사용했습니다.
 
-계약과 전환 방법은 [Provider 계약](provider_contract.md), 남은 구현은 [개선 진행표](improvement_backlog.md), 재개 순서는 [세션 인계](SESSION_HANDOFF.md)를 참고하세요.
+계약과 전환 방법은 [Provider 계약](../provider_contract.md), 남은 구현은 [개선 진행표](../improvement_backlog.md), 재개 순서는 [세션 인계](session_handoff_2026-10-15.md)를 참고하세요.

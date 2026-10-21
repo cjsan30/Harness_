@@ -129,18 +129,18 @@ run_ps_file "$target_harness/scripts/init_project_adapter.ps1" -ProjectName pr-c
 git -C "$target_root" add -A
 git -C "$target_root" -c user.name='Harness PR' -c user.email='harness-pr@example.invalid' commit --no-verify -m 'bootstrap target' >/dev/null
 
-git -C "$target_root" checkout -B codex/test/pr-candidate >/dev/null 2>&1
+git -C "$target_root" checkout -B test/pr-candidate >/dev/null 2>&1
 printf '%s\n' "candidate" > "$target_root/pr_candidate.txt"
 git -C "$target_root" add -A
 git -C "$target_root" -c user.name='Harness PR' -c user.email='harness-pr@example.invalid' commit --no-verify -m 'candidate change' >/dev/null
 
 run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage final -Command true -AllowWeakCommand -RepositoryRoot "$target_root" >/dev/null
-approval_output="$(run_ps_file "$target_harness/scripts/request_main_merge_approval.ps1" -SourceBranch codex/test/pr-candidate -RepositoryRoot "$target_root")"
+approval_output="$(run_ps_file "$target_harness/scripts/request_main_merge_approval.ps1" -SourceBranch test/pr-candidate -RepositoryRoot "$target_root")"
 approval_id="$(printf '%s\n' "$approval_output" | awk -F': ' '/^approval_id:/ { print $2; exit }')"
 run_ps_file "$target_harness/scripts/set_main_merge_approval.ps1" -ApprovalId "$approval_id" -Status approved -Approver smoke -RepositoryRoot "$target_root" >/dev/null
 
-run_ps_file "$target_harness/scripts/open_pr_candidate.ps1" -SourceBranch codex/test/pr-candidate -SkipPush -RepositoryRoot "$target_root" >/dev/null
-run_ps_file "$target_harness/scripts/check_pr_status.ps1" -PullRequest codex/test/pr-candidate -RepositoryRoot "$target_root" >/dev/null
-run_ps_file "$target_harness/scripts/merge_pr_if_allowed.ps1" -PullRequest codex/test/pr-candidate -ApprovalId "$approval_id" -RepositoryRoot "$target_root" >/dev/null
+run_ps_file "$target_harness/scripts/open_pr_candidate.ps1" -SourceBranch test/pr-candidate -SkipPush -RepositoryRoot "$target_root" >/dev/null
+run_ps_file "$target_harness/scripts/check_pr_status.ps1" -PullRequest test/pr-candidate -RepositoryRoot "$target_root" >/dev/null
+run_ps_file "$target_harness/scripts/merge_pr_if_allowed.ps1" -PullRequest test/pr-candidate -ApprovalId "$approval_id" -RepositoryRoot "$target_root" >/dev/null
 
 printf '%s\n' 'pr_control_smoke: pass'

@@ -17,8 +17,8 @@ Each worker should read:
 
 ## Git Rule
 
-- live work must happen on a feature branch named `codex/<owner>/<task>`
-- workers do not work directly on `main`, `dev`, or `codex/test/*`
+- live work must happen on a feature branch named `<owner>/<task>`
+- workers do not work directly on `main`, `dev`, or `test/*`
 - commits, pushes, and promotions follow `harness/configs/git_policy.md`
 
 ## Owner Map

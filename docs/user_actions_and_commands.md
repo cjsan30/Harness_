@@ -19,7 +19,7 @@ Read the [shell contract and migration guide](shell_commands.md) for exit codes,
 
 `pwsh -NoProfile -File scripts/test_harness_entrypoints.ps1` creates isolated real CLI fixtures and compares native PowerShell/Bash calls, plus CMD on Windows. It is included in the full self-test. The optional `-FixtureDirectory` is for a previous shell-test output directory, never a production project. The fixtures' commands are temporarily changed for failure tests and restored afterward.
 
-`test_harness_shell.ps1 -CasePattern '*relocated*'` reruns only the two relocation cases. Filtered pass counts are not whole-suite results. See [actual platform coverage](verification_platforms_2026-10-15.md) for WSL/Linux filesystem and runtime details.
+`test_harness_shell.ps1 -CasePattern '*relocated*'` reruns only the two relocation cases. Filtered pass counts are not whole-suite results. See [actual platform coverage](archive/verification_platforms_2026-10-15.md) for WSL/Linux filesystem and runtime details.
 
 ## Harness Development Checkout
 
@@ -324,9 +324,11 @@ pwsh -NoProfile -File harness/scripts/invoke_pending_assignment_codex.ps1 -Agent
 pwsh -NoProfile -File harness/scripts/install_git_hooks.ps1
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage bootstrap
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature
+pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature -AllowCommittedHead
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage integration
 pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage final
 pwsh -NoProfile -File harness/scripts/audit_git_workflow.ps1
+pwsh -NoProfile -File harness/scripts/approve_branch_deletion.ps1 -Branch <branch> -Approver <name> -Reason <why>
 pwsh -NoProfile -File harness/scripts/request_main_merge_approval.ps1 -SourceBranch <test-branch>
 pwsh -NoProfile -File harness/scripts/set_main_merge_approval.ps1 -ApprovalId <approval-id> -Status approved -Approver <name>
 pwsh -NoProfile -File harness/scripts/authorize_branch_promotion.ps1 -SourceBranch <feature-branch> -TargetBranch dev
@@ -343,7 +345,7 @@ pwsh -NoProfile -File harness/scripts/merge_pr_if_allowed.ps1 -PullRequest <pr-n
 
 Git gate commands must be real validation commands. No-op or failure-masking commands such as `true`, `exit 0`, or `|| true` are rejected.
 
-Hybrid PR control keeps the local harness approval as the human decision point, then lets GitHub Actions provide the remote test gate. `open_pr_candidate.ps1` requires a passing final gate for the exact `codex/test/*` tree. `merge_pr_if_allowed.ps1` requires the approved local main approval, the same source head, required PR checks passing, and then calls `gh pr merge --match-head-commit`.
+Hybrid PR control keeps the local harness approval as the human decision point, then lets GitHub Actions provide the remote test gate. `open_pr_candidate.ps1` requires a passing final gate for the exact `test/*` tree. `merge_pr_if_allowed.ps1` requires the approved local main approval, the same source head, required PR checks passing, and then calls `gh pr merge --match-head-commit`.
 
 For server-side enforcement, install and merge `.github/workflows/harness-ci.yml`, then configure that check as required in GitHub branch protection or rulesets.
 

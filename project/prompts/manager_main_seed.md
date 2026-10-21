@@ -66,5 +66,5 @@ Live behavior:
 - retries failed worker assignments up to 3 attempts by default
 - continues to the next assignment unless `-StopOnWorkerFailure` is set
 - automatically promotes all-passing work through `dev`
-- prepares a final `codex/test/*` branch and requests `main` approval
+- prepares a final `test/*` branch and requests `main` approval
 - does not approve or merge `main`

@@ -50,10 +50,10 @@
 
 ## 범위와 운영 전제
 
-- 공식 문서와 SDK의 메시지 정의를 토대로 fixture를 구성했습니다. [Claude 계약](claude_adapter.md)에 출처·권한·토큰 계산·필요 CLI 옵션을 기록했습니다. fake 실행기는 실제 Claude가 해당 인수를 지원하고 권한 정책을 집행한다는 실증이 아닙니다.
+- 공식 문서와 SDK의 메시지 정의를 토대로 fixture를 구성했습니다. [Claude 계약](../claude_adapter.md)에 출처·권한·토큰 계산·필요 CLI 옵션을 기록했습니다. fake 실행기는 실제 Claude가 해당 인수를 지원하고 권한 정책을 집행한다는 실증이 아닙니다.
 - 실제 Claude Code 호출·모델 품질·계정 요금·CLI 버전별 동작, WSL/Linux·원격 CI는 미검증입니다. 실제 AI 유료 호출은 이번 요청에서 제외했습니다.
 - adapter는 acceptEdits와 승인 필요 호출 거부를 사용합니다. 대상 프로젝트는 검증/완료 shell 명령의 권한을 별도로 설정해야 합니다. OS sandbox나 범용 secret 마스킹은 제공하지 않습니다.
 - 공통 worker의 native 입력/출력을 UTF-8로 지정했으며, 기존 Codex 회귀도 함께 실행합니다. 구형 metadata 없는 기록은 계속 Codex로 해석합니다.
 - 개발 checkout의 활성 프로필·remote·core.hooksPath·첫 커밋은 추가하지 않았습니다. 원본 Harness 폴더도 변경하지 않았습니다.
 
-재개 문서는 [세션 인계](SESSION_HANDOFF.md), 남은 작업은 [개선 진행표](improvement_backlog.md)입니다.
+재개 문서는 [세션 인계](session_handoff_2026-10-15.md), 남은 작업은 [개선 진행표](../improvement_backlog.md)입니다.

@@ -1,3 +1,5 @@
+> 보관본 (2026-10-20): 더 이상 갱신하지 않습니다. 현재 상태와 다음 작업은 [current_state.md](../current_state.md)를 보세요.
+
 # Harness Improvement 세션 인계
 
 ## 최신 문서화 인계 — 2026-10-15
@@ -15,7 +17,7 @@
 이전 작업 종료 시점의 서버는 `http://127.0.0.1:8768/`였습니다. 새 세션에서는 생존을
 가정하지 말고 확인하세요. 저장소 루트에서 `pwsh -NoProfile -File scripts/harness.ps1 dashboard`
 로 다시 실행할 수 있습니다. 현재 checkout의 프로필 미설정/빈 작업은 정상입니다.
-사용자의 핵심 개선 보류 결정을 유지하고 [다음 세션 프롬프트](next_session_prompt.md)로 이어갑니다.
+사용자의 핵심 개선 보류 결정을 유지하고 [다음 세션 프롬프트](next_session_prompt_2026-10-15.md)로 이어갑니다.
 
 ## 최신 구현: 로컬 조회 현황판
 
@@ -33,8 +35,8 @@ Linux 새 worker에는 boot ID/PID/시작 tick을 기록하여 벽시계 변환 
 현재 단계 이벤트는 없으므로 마지막 완료 사이클로 표시합니다. 작업 분모는 보존 큐이며
 미배정 계획까지 포함하지 않습니다. 현재 checkout은 계속 프로필 미설정 상태입니다.
 
-화면·서버·새 회귀·CLI 연동 파일은 [기능 목록](feature_inventory.md)의 29번,
-[사용법과 한계](dashboard.md), [검증 기록](verification_dashboard_2026-10-15.md)을 보세요.
+화면·서버·새 회귀·CLI 연동 파일은 [기능 목록](../feature_inventory.md)의 29번,
+[사용법과 한계](../dashboard.md), [검증 기록](verification_dashboard_2026-10-15.md)을 보세요.
 이전 shell/플랫폼·18개 backlog는 아래에 보존합니다. 다음 구현은 사용자의 현황판
 피드백을 먼저 확인하고, schema/DAG·검증 어댑터를 자동으로 계속하지 않습니다.
 
@@ -56,7 +58,7 @@ Linux 새 worker에는 boot ID/PID/시작 tick을 기록하여 벽시계 변환 
 
 새 파일은 `validation_command.ps1`, `run_harness_shell.ps1`, `invoke_harness.sh`, `test_harness_shell.ps1`입니다. 실제 Node 숫자 합계 CLI를 독립/중첩 fixture에 만들고 한글·공백·대괄호·& 경로, 인자의 &/| 보존, 빌드·테스트·실패 중단·복사 후 실행을 검증했습니다. 수정 전 0/12, 수정 후 신규 36/36(유닛 4·통합 20·보안 12)이 Windows PS5/7에서 통과했습니다. 전체 회귀·중간 fixture 문제·지원 한계는 [최신 검증](verification_shell_2026-10-15.md)에 있습니다.
 
-[Shell 계약과 전환](shell_commands.md)을 먼저 읽으세요. 프로필 명령은 실제 도구를 지정하고 wrapper를 다시 부르지 않습니다. 명령 문자열은 여전히 OS shell 문법이며 argv schema나 sandbox는 아닙니다. 실제 유료 호출·원격 CI·WSL/Linux는 수행하지 않았습니다. 다음은 전체 작업 schema/DAG와 프로젝트별 검증 어댑터입니다. 아래 구현 묶음은 당시 이력입니다.
+[Shell 계약과 전환](../shell_commands.md)을 먼저 읽으세요. 프로필 명령은 실제 도구를 지정하고 wrapper를 다시 부르지 않습니다. 명령 문자열은 여전히 OS shell 문법이며 argv schema나 sandbox는 아닙니다. 실제 유료 호출·원격 CI·WSL/Linux는 수행하지 않았습니다. 다음은 전체 작업 schema/DAG와 프로젝트별 검증 어댑터입니다. 아래 구현 묶음은 당시 이력입니다.
 
 최종 코드 전체 회귀는 Windows PowerShell 5.1/7 각각 **221/221**과 프로세스 exit 0을 확인했습니다. 구문 PS82·shell20·설정 JSON, 별도 실제 make 2/2, 문서 링크·기능 목록 정합성도 통과했습니다. 18개 results.json을 대조한 결과는 `.test-output/full-shell-summary.json`입니다. 이전 묶음의 일부 재실행 합산과 구분합니다.
 
@@ -66,7 +68,7 @@ Linux 새 worker에는 boot ID/PID/시작 tick을 기록하여 벽시계 변환 
 
 Claude는 acceptEdits와 permission-prompts none을 명시합니다. 권한 우회나 무제한 Bash를 허용하지 않으며 대상 프로젝트에서 필요한 검증·완료 명령 권한을 구성해야 합니다. final result가 없거나 잘못된 경우 provider_protocol 실패입니다. 명시적 실패·권한 거부·취소도 성공으로 인정하지 않습니다. input/cache-read/cache-creation을 합산하되 assistant/delta/modelUsage는 중복 합산하지 않습니다. 실제 모델·비용·구독 한도는 추정하지 않습니다.
 
-현재 소스는 PowerShell 79개 + shell 19개입니다. [Claude 계약](claude_adapter.md)과 [최신 검증 기록](verification_claude_2026-10-15.md)을 먼저 읽으세요. 실제 AI 인증·유료 호출·원격 CI·WSL/Linux 검증은 하지 않았습니다. 다음 우선순위는 legacy 개별 make shell 정리 및 플랫폼 실증이며, 실제 유료 provider 검증은 별도 승인 범위입니다.
+현재 소스는 PowerShell 79개 + shell 19개입니다. [Claude 계약](../claude_adapter.md)과 [최신 검증 기록](verification_claude_2026-10-15.md)을 먼저 읽으세요. 실제 AI 인증·유료 호출·원격 CI·WSL/Linux 검증은 하지 않았습니다. 다음 우선순위는 legacy 개별 make shell 정리 및 플랫폼 실증이며, 실제 유료 provider 검증은 별도 승인 범위입니다.
 
 최종 검증은 두 Windows 런타임 각각 기존 147/147 + Claude 38/38(유닛 10·통합 9·보안 19)입니다. PS5 전체 183개 통과 후 JSON 배열 타입 차단 2개를 추가해 Claude 38개를 재실행했고, PS7 전체 실행은 최종 185개로 통과했습니다. 구문 79개·설정 JSON, 문서 링크와 기능 목록 누락 0건도 확인했습니다. 이전 묶음 숫자는 아래에 이력으로 보존합니다.
 
@@ -76,7 +78,7 @@ Claude는 acceptEdits와 permission-prompts none을 명시합니다. 권한 우�
 
 미지원 provider/버전/필드와 다른 invocation·model의 결과를 거부합니다. exit 0이어도 turn.failed/error 이벤트면 성공으로 인정하지 않으며 완료 증거·복구·재검증 경로도 거부합니다. 사용량 unknown/null·실제 모델/금액 미추정·예약 보존 정책을 유지합니다. Codex가 유일한 실제 adapter이고 Claude 구현은 남아 있습니다.
 
-새 파일: `provider_contract.ps1`, `provider_codex.ps1`, `test_provider_contract.ps1`. 프로필 template에 선택적 worker_provider v1/codex를 추가했으며 legacy 프로필/worker/ledger는 문서화된 Codex 호환 경로로 읽습니다. [계약](provider_contract.md), [최신 검증](verification_provider_2026-10-15.md)을 먼저 읽으세요. 지원 범위는 로컬 fake provider이며 실제 유료 AI·원격 CI는 실행하지 않았습니다.
+새 파일: `provider_contract.ps1`, `provider_codex.ps1`, `test_provider_contract.ps1`. 프로필 template에 선택적 worker_provider v1/codex를 추가했으며 legacy 프로필/worker/ledger는 문서화된 Codex 호환 경로로 읽습니다. [계약](../provider_contract.md), [최신 검증](verification_provider_2026-10-15.md)을 먼저 읽으세요. 지원 범위는 로컬 fake provider이며 실제 유료 AI·원격 CI는 실행하지 않았습니다.
 
 다음 작업은 Claude adapter의 실행/권한/사용량 정규화 계약 구현과 legacy 개별 make shell 정리입니다. 실제 과금 실행 없이 fixture부터 확장하고, 새 provider로 예산·완료 증거·승인 정책을 우회하지 않도록 유지하세요.
 
@@ -88,7 +90,7 @@ Claude는 acceptEdits와 permission-prompts none을 명시합니다. 권한 우�
 
 `scripts/harness.ps1`에서 init/doctor/run/status/resume/usage/test/help를 제공합니다. `-Preview`는 파일 변경 없는 호출 계획, `-DryRun`은 기존 workflow의 preview 실행입니다. resume는 보고서 조회가 기본이고 `-Execute`로 실행합니다. run/resume는 명시적 PlanFile을 요구합니다. JSON v1 응답과 CLI exit 0/1/2를 제공하며 실제 child 코드는 보존합니다.
 
-새 파일은 `harness.ps1`, `harness_cli.ps1`, `test_harness_cli.ps1`입니다. 기존 스크립트는 유지하며 provider·usage·증거·승인 정책은 변경하지 않았습니다. [CLI 사용법](cli.md)과 [검증 기록](verification_cli_2026-10-15.md)을 먼저 읽으세요.
+새 파일은 `harness.ps1`, `harness_cli.ps1`, `test_harness_cli.ps1`입니다. 기존 스크립트는 유지하며 provider·usage·증거·승인 정책은 변경하지 않았습니다. [CLI 사용법](../cli.md)과 [검증 기록](verification_cli_2026-10-15.md)을 먼저 읽으세요.
 
 신규 테스트는 Windows PS5/7 각각 유닛 12 + 통합 8 + 보안 5 = **25/25**, CLI를 통한 구문 74개·JSON 통과입니다. 이전 전체 100개는 기존 근거를 확인했으며 이번 변경 뒤 전체 125개를 재실행한 것으로 합산하지 않습니다. 다음 우선순위는 provider 실행·결과·usage 계약 분리(12)와 legacy 개별 make shell 정리입니다.
 
@@ -98,7 +100,7 @@ Claude는 acceptEdits와 permission-prompts none을 명시합니다. 권한 우�
 
 worker 종료·복구·seed 재개/재시도/승격·상태 조회에 재검사를 연결했습니다. feature commit 뒤에는 검증을 다시 실행하고 integration gate 후에도 확인합니다. 증거 없는 legacy pass는 `validation_unverified`와 `done_unverified`로 표시합니다. 성공 종료가 확인된 기존 pass는 `-Revalidate`로 새 증거를 만들며 이력을 보존합니다.
 
-먼저 [실행 증거 계약](assignment_evidence.md), [네 번째 검증 기록](verification_evidence_2026-10-15.md)을 읽으세요. 검증은 owner queue lease 안에서 실행되고 timeout은 아직 없습니다. 제품 동작 자체의 독립 검증이나 악의적인 로컬 증거 위조 방지는 보장하지 않습니다. PS5의 대괄호 경로 문제 때문에 검증 스크립트는 `$PSScriptRoot` 기반 절대 입력 경로를 사용해야 합니다.
+먼저 [실행 증거 계약](../assignment_evidence.md), [네 번째 검증 기록](verification_evidence_2026-10-15.md)을 읽으세요. 검증은 owner queue lease 안에서 실행되고 timeout은 아직 없습니다. 제품 동작 자체의 독립 검증이나 악의적인 로컬 증거 위조 방지는 보장하지 않습니다. PS5의 대괄호 경로 문제 때문에 검증 스크립트는 `$PSScriptRoot` 기반 절대 입력 경로를 사용해야 합니다.
 
 새 스크립트는 `assignment_evidence.ps1`, `test_assignment_evidence.ps1`입니다. 다음 우선순위는 단일 운영 CLI/provider 계약 분리(11·12)이며 전체 작업 DAG/schema(13), 프로젝트별 검증 어댑터(16)는 남아 있습니다. 실제 유료 실행과 원격 서비스 변경은 수행하지 않았습니다.
 
@@ -110,7 +112,7 @@ worker 종료·복구·seed 재개/재시도/승격·상태 조회에 재검사�
 
 세 번째 묶음은 독립/이식 엔진 위치 구분, 한글·공백·대괄호 경로, worktree hook bootstrap, 생성 환경·CI·릴리스 경로, cycle shell 위임입니다. 이어 JSONL 토큰·실행 시간·시도 이력을 invocation별로 저장하고 공통 lease 안에서 실행 횟수·재시도·동시 실행과 다음 실행 토큰/시간 제한을 적용했습니다. 제거된 Codex `--full-auto`도 수정했습니다.
 
-[배치 지원](layout_support.md), [사용량과 제한](execution_usage.md), [최신 검증 기록](verification_layout_usage_2026-10-15.md)을 우선 읽으세요. 금액·구독 잔여량·실행 중 강제 timeout은 미구현입니다. 모르는 사용량은 null/unknown이며 미확인 예약을 자동 환불하지 않습니다.
+[배치 지원](../layout_support.md), [사용량과 제한](../execution_usage.md), [최신 검증 기록](verification_layout_usage_2026-10-15.md)을 우선 읽으세요. 금액·구독 잔여량·실행 중 강제 timeout은 미구현입니다. 모르는 사용량은 null/unknown이며 미확인 예약을 자동 환불하지 않습니다.
 
 새 파일: `harness_layout.ps1`, `hook_bootstrap.sh`, `test_harness_layout.ps1`, `execution_usage.ps1`, `get_execution_usage.ps1`, `test_execution_usage.ps1`. 핵심 기존 경로와 worker host를 연결했고 비활성 .githooks 복사본도 동기화했습니다. 실제 개발 checkout에 hook을 활성화하거나 프로필을 만들지는 않았습니다.
 
@@ -122,7 +124,7 @@ worker 종료·복구·seed 재개/재시도/승격·상태 조회에 재검사�
 
 문서 인계 후 사용자가 다음 개선 구현을 요청하여 두 번째 묶음을 구현했습니다. **worker 실행 전 durable intent, 별도 worker host/lease, 부모 종료 후 중복 실행 차단, 담당자별 큐 journal과 중단 복구**가 추가됐습니다. 종료가 불명확하면 강제 재실행하지 않고 격리합니다.
 
-설계·운영 명령·남은 한계는 [복구 설계](recovery_design.md), 결과는 [2026-10-15 검증](verification_2026-10-15.md)에 있습니다. Windows PowerShell 5.1/7 각각 기존 안전성 23/23 + 복구 15/15, PowerShell 64개 구문/설정 JSON이 통과했습니다. 실제 AI나 원격 CI 실행은 여전히 하지 않았습니다.
+설계·운영 명령·남은 한계는 [복구 설계](../recovery_design.md), 결과는 [2026-10-15 검증](verification_2026-10-15.md)에 있습니다. Windows PowerShell 5.1/7 각각 기존 안전성 23/23 + 복구 15/15, PowerShell 64개 구문/설정 JSON이 통과했습니다. 실제 AI나 원격 CI 실행은 여전히 하지 않았습니다.
 
 새 파일은 `assignment_state.ps1`, `run_assignment_worker.ps1`, `repair_assignment_state.ps1`, `test_harness_recovery.ps1`, `test_recovery_child.ps1`입니다. common/claim/complete/invoke/seed dispatch/retry dispatch/seed resume와 자체 테스트 진입점을 연결했습니다. `repair_assignment_state.ps1 -Agent <owner> [-AssignmentId <id>]`는 journal과 확인된 종료만 조정합니다.
 
@@ -132,11 +134,11 @@ worker 종료·복구·seed 재개/재시도/승격·상태 조회에 재검사�
 
 1. 이 문서: 현재 상태, 구현 내용, 작업 재개 순서
 2. [대화·평가·비용 논의 기록](conversation_history_2026-10-14.md): 사용자 의도와 추정의 가정
-3. [개선 진행표](improvement_backlog.md): 18개 과제의 상태와 완료 기준
+3. [개선 진행표](../improvement_backlog.md): 18개 과제의 상태와 완료 기준
 4. [최신 검증 기록](verification_platforms_2026-10-15.md), [첫 검증 기록](verification_2026-10-14.md): 실제 실행한 테스트와 미검증 범위
-5. [기능 목록](feature_inventory.md), [개발 지침](../AGENT.md), [현재 상태](current_state.md)
+5. [기능 목록](../feature_inventory.md), [개발 지침](../../AGENT.md), [현재 상태](../current_state.md)
 
-새 세션에 전달할 문구는 [다음 세션 시작 프롬프트](next_session_prompt.md)에 있습니다.
+새 세션에 전달할 문구는 [다음 세션 시작 프롬프트](next_session_prompt_2026-10-15.md)에 있습니다.
 
 ## 사용자와 확정한 방향
 
@@ -228,7 +230,7 @@ Git workflow 상태는 읽은 원문 snapshot을 기록하고 저장 잠금 안�
 4. 추가 Linux 환경·원격 CI, 금액 예산·실행 중 timeout은 환경·정책을 확인합니다. 이미 검증한 WSL2 Ubuntu 범위는 최신 기록을 따르며 불확실한 worker/예약은 계속 fail-closed로 유지합니다.
 5. 필요한 코드 검증과 함께 진행표·현재 상태·이 문서의 상태를 갱신합니다. 사용자 지시가 바뀌면 새 지시를 우선합니다.
 
-다음 순서는 기술적 권고이며 18개 과제 전체의 완료를 뜻하지 않습니다. 각 과제의 상세 완료 기준은 [개선 진행표](improvement_backlog.md)가 기준입니다.
+다음 순서는 기술적 권고이며 18개 과제 전체의 완료를 뜻하지 않습니다. 각 과제의 상세 완료 기준은 [개선 진행표](../improvement_backlog.md)가 기준입니다.
 
 ## 다음 세션에도 유지할 사용자 작업 규칙
 

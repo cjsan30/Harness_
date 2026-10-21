@@ -36,6 +36,6 @@ pwsh -NoProfile -File scripts/test_harness.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_harness.ps1
 ```
 
-복구만 실행하려면 `scripts/test_harness_recovery.ps1`을 사용합니다. 코드·설계는 [복구 설계](recovery_design.md)에 정리했습니다.
+복구만 실행하려면 `scripts/test_harness_recovery.ps1`을 사용합니다. 코드·설계는 [복구 설계](../recovery_design.md)에 정리했습니다.
 
 유료 AI, 실제 GitHub API/merge, Docker, Telegram, WSL/Linux 및 원격 CI는 실행하지 않았습니다. 실제 전체 seed 배포·승격 cycle을 통과했다는 뜻도 아닙니다. 강제 종료 시험은 로컬 파일시스템의 프로세스 중단을 검증하며 전원 손실·네트워크 파일시스템·CLI가 분리해 둔 임의 background descendant의 종료를 보장하지 않습니다.

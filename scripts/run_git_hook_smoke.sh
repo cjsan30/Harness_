@@ -70,26 +70,40 @@ require_blocked "weak bootstrap gate command" run_ps_file "$target_harness/scrip
 run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage bootstrap -Command true -AllowWeakCommand -RepositoryRoot "$target_root" >/dev/null
 git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit -m "bootstrap baseline" >/dev/null
 
-git -C "$target_root" checkout -B codex/agent-tests/hook-test >/dev/null 2>&1
+git -C "$target_root" checkout -B agent-tests/hook-test >/dev/null 2>&1
 printf '%s\n' "feature change" > "$target_root/hook_feature.txt"
 git -C "$target_root" add -A
-require_blocked "feature commit before feature gate" git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit -m "blocked feature commit"
-require_blocked "pipeline failure in feature gate" run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage feature -Owner agent-tests -Command "false | true" -RepositoryRoot "$target_root"
-
-run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage feature -Owner agent-tests -Command true -AllowWeakCommand -RepositoryRoot "$target_root" >/dev/null
-git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit -m "feature after gate" >/dev/null
+git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit -m "feature work before gate" >/dev/null
 
 git -C "$target_root" remote add origin "$remote_root"
-require_blocked "feature refspec into dev" git -C "$target_root" push origin codex/agent-tests/hook-test:dev
-git -C "$target_root" push origin codex/agent-tests/hook-test:codex/agent-tests/hook-test >/dev/null
+require_blocked "feature push before feature gate" git -C "$target_root" push origin agent-tests/hook-test:agent-tests/hook-test
+require_blocked "pipeline failure in feature gate" run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage feature -Owner agent-tests -Command "false | true" -AllowCommittedHead -RepositoryRoot "$target_root"
+
+run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage feature -Owner agent-tests -Command true -AllowWeakCommand -AllowCommittedHead -RepositoryRoot "$target_root" >/dev/null
+require_blocked "feature refspec into dev" git -C "$target_root" push origin agent-tests/hook-test:dev
+git -C "$target_root" push origin agent-tests/hook-test:agent-tests/hook-test >/dev/null 2>&1
 
 git -C "$target_root" checkout -B dev main >/dev/null 2>&1
-require_blocked "merge before integration promotion" run_ps_file "$target_harness/scripts/merge_authorized_branch.ps1" -SourceBranch codex/agent-tests/hook-test -TargetBranch dev -RepositoryRoot "$target_root"
+require_blocked "direct dev commit" git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit --allow-empty -m "blocked dev commit"
+require_blocked "merge before integration promotion" run_ps_file "$target_harness/scripts/merge_authorized_branch.ps1" -SourceBranch agent-tests/hook-test -TargetBranch dev -RepositoryRoot "$target_root"
 
-git -C "$target_root" checkout codex/agent-tests/hook-test >/dev/null 2>&1
+git -C "$target_root" checkout agent-tests/hook-test >/dev/null 2>&1
 run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage integration -Command true -AllowWeakCommand -RepositoryRoot "$target_root" >/dev/null
-run_ps_file "$target_harness/scripts/authorize_branch_promotion.ps1" -SourceBranch codex/agent-tests/hook-test -TargetBranch dev -AuthorizedBy hook-smoke -RepositoryRoot "$target_root" >/dev/null
+run_ps_file "$target_harness/scripts/authorize_branch_promotion.ps1" -SourceBranch agent-tests/hook-test -TargetBranch dev -AuthorizedBy hook-smoke -RepositoryRoot "$target_root" >/dev/null
 git -C "$target_root" checkout dev >/dev/null 2>&1
-run_ps_file "$target_harness/scripts/merge_authorized_branch.ps1" -SourceBranch codex/agent-tests/hook-test -TargetBranch dev -RepositoryRoot "$target_root" >/dev/null
+run_ps_file "$target_harness/scripts/merge_authorized_branch.ps1" -SourceBranch agent-tests/hook-test -TargetBranch dev -RepositoryRoot "$target_root" >/dev/null
+git -C "$target_root" push origin dev:dev >/dev/null 2>&1
+
+git -C "$target_root" checkout -B agent-tests/unmerged dev >/dev/null 2>&1
+printf '%s\n' "unmerged change" > "$target_root/hook_unmerged.txt"
+git -C "$target_root" add -A
+git -C "$target_root" -c user.name="Harness Hook" -c user.email="hook@example.invalid" commit -m "unmerged work" >/dev/null
+run_ps_file "$target_harness/scripts/run_git_gate.ps1" -Stage feature -Owner agent-tests -Command true -AllowWeakCommand -AllowCommittedHead -RepositoryRoot "$target_root" >/dev/null
+git -C "$target_root" push origin agent-tests/unmerged:agent-tests/unmerged >/dev/null 2>&1
+git -C "$target_root" checkout dev >/dev/null 2>&1
+
+require_blocked "unmerged feature branch deletion" git -C "$target_root" push origin --delete agent-tests/unmerged
+require_blocked "protected dev branch deletion" git -C "$target_root" push origin --delete dev
+git -C "$target_root" push origin --delete agent-tests/hook-test >/dev/null 2>&1
 
 printf '%s\n' 'git_hook_smoke: pass'

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "description": "Git policy for developing the Harness engine itself. Used only when no project profile exists and the engine is at the repository root. Not a target project profile.",
+  "git_workflow": {
+    "hooks_path": ".githooks",
+    "state_file": "harness/state/git_workflow/state.json",
+    "reports_dir": "harness/reports/git_workflow",
+    "bootstrap_branch": "main",
+    "main_branch": "main",
+    "dev_branch": "dev",
+    "feature_branch_prefix": "",
+    "test_branch_prefix": "test/"
+  },
+  "owners": {
+    "agent-runtime": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "agent-query": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "agent-storage": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "agent-index": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "agent-tests": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "manager-main": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" },
+    "manager-harness": { "validation": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage feature" }
+  },
+  "commands": {
+    "integration": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage integration",
+    "full_cycle": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run_self_gate.ps1 -Stage final"
+  }
+}

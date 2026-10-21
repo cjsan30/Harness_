@@ -35,13 +35,13 @@ switch ($Stage) {
 
         $resolvedOwner = "manager-harness"
         if ([string]::IsNullOrWhiteSpace($stageCommand)) {
-            $stageCommand = Get-ProjectCommand -RootDir $rootDir -Name "full_cycle" -Fallback "pwsh -NoProfile -File harness/scripts/run_harness_cycle.ps1"
+            $stageCommand = Get-GitGateCommand -RootDir $rootDir -Stage "bootstrap"
         }
         $stageSummary = "Baseline bootstrap gate before the first protected main push."
     }
     "feature" {
         if ($branchInfo.Kind -ne "feature") {
-            throw "feature gate requires a feature branch named like codex/<owner>/<task>"
+            throw "feature gate requires a feature branch named like $((Get-GitWorkflowConfig -RootDir $rootDir).FeatureBranchPrefix)<owner>/<task> with an owner listed in the workflow policy"
         }
 
         if ([string]::IsNullOrWhiteSpace($Owner)) {
@@ -54,7 +54,7 @@ switch ($Stage) {
 
         $resolvedOwner = $Owner
         if ([string]::IsNullOrWhiteSpace($stageCommand)) {
-            $stageCommand = Get-OwnerValidationCommand -RootDir $rootDir -Owner $Owner
+            $stageCommand = Get-GitGateCommand -RootDir $rootDir -Stage "feature" -Owner $Owner
         }
         $stageSummary = "Owner validation gate before commit or push from a feature branch."
     }
@@ -65,18 +65,18 @@ switch ($Stage) {
 
         $resolvedOwner = "manager-main"
         if ([string]::IsNullOrWhiteSpace($stageCommand)) {
-            $stageCommand = Get-ProjectCommand -RootDir $rootDir -Name "integration" -Fallback "make integration"
+            $stageCommand = Get-GitGateCommand -RootDir $rootDir -Stage "integration"
         }
         $stageSummary = "Manager integration gate before authorizing promotion into dev."
     }
     "final" {
         if ($branchInfo.Kind -ne "test") {
-            throw "final gate requires a dedicated test branch named like codex/test/<candidate>"
+            throw "final gate requires a dedicated test branch named like $((Get-GitWorkflowConfig -RootDir $rootDir).TestBranchPrefix)<candidate>"
         }
 
         $resolvedOwner = "manager-harness"
         if ([string]::IsNullOrWhiteSpace($stageCommand)) {
-            $stageCommand = Get-ProjectCommand -RootDir $rootDir -Name "full_cycle" -Fallback "pwsh -NoProfile -File harness/scripts/run_harness_cycle.ps1"
+            $stageCommand = Get-GitGateCommand -RootDir $rootDir -Stage "final"
         }
         $stageSummary = "Full final gate on the dedicated test branch before main approval."
     }

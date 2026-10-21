@@ -8,8 +8,9 @@ foreach ($file in $scripts) {
     [Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
     foreach ($parseIssue in $errors) { $failures.Add("$($file.Name):$($parseIssue.Extent.StartLineNumber) $($parseIssue.Message)") }
 }
-foreach ($directory in @('configs', 'project')) {
-    foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $root $directory) -Filter '*.json' -File -Recurse)) {
+foreach ($directory in @('configs', 'project', '.harness')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $root $directory) -PathType Container)) { continue }
+    foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $root $directory) -Filter '*.json' -File -Recurse -Force)) {
         try { Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName | ConvertFrom-Json | Out-Null }
         catch { $failures.Add("invalid JSON: $($file.FullName)") }
     }
@@ -19,7 +20,7 @@ Write-Output "Syntax: $($scripts.Count) PowerShell scripts and configuration JSO
 if ($SyntaxOnly) { exit 0 }
 . (Join-Path $PSScriptRoot 'harness_common.ps1')
 $failed = $false
-foreach ($suite in @('test_harness_safety.ps1', 'test_harness_recovery.ps1', 'test_execution_usage.ps1', 'test_assignment_evidence.ps1', 'test_harness_layout.ps1', 'test_harness_cli.ps1', 'test_provider_contract.ps1', 'test_provider_claude.ps1', 'test_harness_shell.ps1', 'test_harness_dashboard.ps1')) {
+foreach ($suite in @('test_harness_safety.ps1', 'test_harness_recovery.ps1', 'test_execution_usage.ps1', 'test_assignment_evidence.ps1', 'test_harness_layout.ps1', 'test_harness_cli.ps1', 'test_provider_contract.ps1', 'test_provider_claude.ps1', 'test_harness_shell.ps1', 'test_harness_dashboard.ps1', 'test_git_workflow_policy.ps1')) {
     $result = Invoke-HarnessPowerShellFile -FilePath (Join-Path $PSScriptRoot $suite) -AllowFailure
     Write-Output $result.Output
     if (-not $result.Success) { $failed = $true }

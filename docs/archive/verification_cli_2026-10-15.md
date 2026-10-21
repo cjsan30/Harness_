@@ -50,4 +50,4 @@ PS5 테스트 helper가 `ConvertFrom-Json` 배열을 다시 배열로 감싸 중
 
 doctor 검사에서는 preflight가 쓰기 진단용 빈 `.githooks` 디렉터리를 만드는 기존 동작을 hook 설치로 잘못 판정했습니다. 실제 hook 파일이 설치되는지 검사하도록 수정했습니다. 중간 PS7 `5720bec56f924a28b8a47e610707a1b2`(21/23), PS5 `333ed15b707744f3a1a2372b12e1250c`(23/25)는 최종 성공 근거에 포함하지 않았습니다. 최종 표의 새 run에서 모두 통과했습니다.
 
-운영 계약은 [CLI 문서](cli.md), 남은 provider 분리와 legacy shell 과제는 [개선 진행표](improvement_backlog.md)에 있습니다.
+운영 계약은 [CLI 문서](../cli.md), 남은 provider 분리와 legacy shell 과제는 [개선 진행표](../improvement_backlog.md)에 있습니다.

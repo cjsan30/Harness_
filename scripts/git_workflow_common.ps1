@@ -1,5 +1,99 @@
 $script:GitWorkflowStateCache = @{}
 $script:GitWorkflowStateSnapshots = @{}
+$script:HarnessSelfWorkflowRelativePath = ".harness/self_workflow.json"
+
+# The engine repository itself has no target profile. Its own Git policy lives in
+# .harness/self_workflow.json and applies only when there is no project profile and
+# the engine sits at the repository root. A ported copy (harness/ nested) never uses it.
+function Get-HarnessSelfWorkflow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    if ($null -ne (Get-ProjectProfilePath -RootDir $RootDir)) {
+        return $null
+    }
+
+    $root = [System.IO.Path]::GetFullPath($RootDir)
+    if (-not [string]::Equals((Get-HarnessEngineRoot $root), $root, (Get-HarnessPathComparison))) {
+        return $null
+    }
+
+    $path = Join-Path $root $script:HarnessSelfWorkflowRelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        return (Get-Content -Raw -Encoding UTF8 -LiteralPath $path | ConvertFrom-Json)
+    } catch {
+        throw "invalid engine self workflow file: $path"
+    }
+}
+
+# Profile when present, otherwise the engine self workflow, otherwise $null.
+function Get-GitWorkflowPolicySource {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $profile = Get-ProjectProfile -RootDir $RootDir
+    if ($null -ne $profile) {
+        return $profile
+    }
+
+    return Get-HarnessSelfWorkflow -RootDir $RootDir
+}
+
+function Get-GitWorkflowOwnerNames {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir
+    )
+
+    $owners = Get-ProjectObjectProperty -Object (Get-GitWorkflowPolicySource -RootDir $RootDir) -Name "owners"
+    if ($null -eq $owners) {
+        return @()
+    }
+
+    return @($owners.PSObject.Properties.Name)
+}
+
+# Gate commands come only from configuration. There is no make/pwsh fallback:
+# a missing command fails closed with the key that must be configured.
+function Get-GitGateCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("bootstrap", "feature", "integration", "final")]
+        [string]$Stage,
+        [string]$Owner = ""
+    )
+
+    $source = Get-GitWorkflowPolicySource -RootDir $RootDir
+    if ($Stage -eq "feature") {
+        $ownerConfig = Get-ProjectObjectProperty -Object (Get-ProjectObjectProperty -Object $source -Name "owners") -Name $Owner
+        $value = Get-ProjectObjectProperty -Object $ownerConfig -Name "validation"
+        $key = "owners.$Owner.validation"
+    } else {
+        $commandName = if ($Stage -eq "integration") { "integration" } else { "full_cycle" }
+        $value = Get-ProjectObjectProperty -Object (Get-ProjectObjectProperty -Object $source -Name "commands") -Name $commandName
+        $key = "commands.$commandName"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "no command is configured for git gate stage '$Stage'; set $key in the project profile or $($script:HarnessSelfWorkflowRelativePath)"
+    }
+
+    if ($Stage -ne "feature" -and $Stage -ne "integration") {
+        return (Convert-HarnessLayoutText $RootDir ([string]$value))
+    }
+
+    return [string]$value
+}
 
 function Get-GitWorkflowConfig {
     param(
@@ -7,8 +101,7 @@ function Get-GitWorkflowConfig {
         [string]$RootDir
     )
 
-    $profile = Get-ProjectProfile -RootDir $RootDir
-    $config = Get-ProjectObjectProperty -Object $profile -Name "git_workflow"
+    $config = Get-ProjectObjectProperty -Object (Get-GitWorkflowPolicySource -RootDir $RootDir) -Name "git_workflow"
 
     $hooksPath = Get-ProjectObjectProperty -Object $config -Name "hooks_path"
     if ([string]::IsNullOrWhiteSpace($hooksPath)) {
@@ -40,14 +133,15 @@ function Get-GitWorkflowConfig {
         $devBranch = "dev"
     }
 
+    # Feature branches are <owner>/<task> by default; an empty prefix is valid.
     $featurePrefix = Get-ProjectObjectProperty -Object $config -Name "feature_branch_prefix"
     if ([string]::IsNullOrWhiteSpace($featurePrefix)) {
-        $featurePrefix = "codex/"
+        $featurePrefix = ""
     }
 
     $testPrefix = Get-ProjectObjectProperty -Object $config -Name "test_branch_prefix"
     if ([string]::IsNullOrWhiteSpace($testPrefix)) {
-        $testPrefix = "codex/test/"
+        $testPrefix = "test/"
     }
 
     return [pscustomobject]@{
@@ -92,6 +186,7 @@ function New-GitWorkflowState {
         validations = @()
         promotions = @()
         approvals = @()
+        deletion_approvals = @()
     }
 }
 
@@ -105,7 +200,7 @@ function Normalize-GitWorkflowState {
         $State = [pscustomobject](New-GitWorkflowState)
     }
 
-    foreach ($propertyName in @("version", "updated_at", "validations", "promotions", "approvals")) {
+    foreach ($propertyName in @("version", "updated_at", "validations", "promotions", "approvals", "deletion_approvals")) {
         if ($null -eq $State.PSObject.Properties[$propertyName]) {
             Add-Member -InputObject $State -NotePropertyName $propertyName -NotePropertyValue $null
         }
@@ -119,7 +214,7 @@ function Normalize-GitWorkflowState {
         $State.updated_at = ""
     }
 
-    foreach ($collectionName in @("validations", "promotions", "approvals")) {
+    foreach ($collectionName in @("validations", "promotions", "approvals", "deletion_approvals")) {
         $collection = $State.$collectionName
         if ($null -eq $collection) {
             $State.$collectionName = @()
@@ -688,13 +783,7 @@ function Get-GitBranchDescriptor {
         [string]$BranchName = ""
     )
 
-    $profile = Get-ProjectProfile -RootDir $RootDir
-    $owners = Get-ProjectObjectProperty -Object $profile -Name "owners"
-    $ownerNames = @()
-    if ($null -ne $owners) {
-        $ownerNames = @($owners.PSObject.Properties.Name)
-    }
-
+    $ownerNames = @(Get-GitWorkflowOwnerNames -RootDir $RootDir)
     $config = Get-GitWorkflowConfig -RootDir $RootDir
     if ([string]::IsNullOrWhiteSpace($BranchName)) {
         $BranchName = Get-GitCurrentBranch -RootDir $RootDir
@@ -1150,6 +1239,34 @@ function Get-LatestGitPromotion {
     }
 
     return $matches[0]
+}
+
+# A user-approved deletion of an unmerged feature/test branch, bound to the
+# repository, remote, branch name and the exact remote head that will be deleted.
+function Get-GitDeletionApproval {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+        [Parameter(Mandatory = $true)]
+        [string]$RootDir,
+        [Parameter(Mandatory = $true)]
+        [string]$Branch,
+        [Parameter(Mandatory = $true)]
+        [string]$Head,
+        [string]$RemoteName = ""
+    )
+
+    $root = [System.IO.Path]::GetFullPath($RootDir)
+    foreach ($record in @($State.deletion_approvals)) {
+        if ($null -eq $record -or [string]$record.status -ne "approved") { continue }
+        if ([string]$record.branch -cne $Branch -or [string]$record.head -ne $Head) { continue }
+        if (-not [string]::IsNullOrWhiteSpace($RemoteName) -and [string]$record.remote -cne $RemoteName) { continue }
+        if ([string]::IsNullOrWhiteSpace([string]$record.repository_root)) { continue }
+        if (-not [string]::Equals([System.IO.Path]::GetFullPath([string]$record.repository_root), $root, (Get-HarnessPathComparison))) { continue }
+        return $record
+    }
+
+    return $null
 }
 
 function Get-GitApprovalRecord {

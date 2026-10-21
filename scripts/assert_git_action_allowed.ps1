@@ -103,6 +103,59 @@ function Assert-ProtectedMergeBranchAuthorized {
     Assert-ProtectedMergeSourceAuthorized -TargetBranch $TargetBranch -SourceHead $sourceHead
 }
 
+# Remote feature/test branches may be deleted once their remote head is already
+# contained in dev or main, or with a user-recorded deletion approval for that
+# exact head. main and dev are never deletable.
+function Assert-PushDeleteAllowed {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Update
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Update.RemoteBranch)) {
+        Deny-GitAction "deleting non-branch refs is blocked: $($Update.RemoteRef)"
+    }
+
+    $targetInfo = Get-GitBranchDescriptor -RootDir $policyRoot -BranchName $Update.RemoteBranch
+    if ($targetInfo.Kind -notin @("feature", "test")) {
+        Deny-GitAction "branch deletion is allowed only for merged feature or test branches: $($Update.RemoteBranch)"
+    }
+
+    if (Test-GitZeroObjectId -Sha $Update.RemoteSha) {
+        Deny-GitAction "branch deletion could not resolve the remote head of $($Update.RemoteBranch)"
+    }
+
+    $containers = New-Object System.Collections.Generic.List[string]
+    foreach ($protectedBranch in @($config.DevBranch, $config.MainBranch)) {
+        $containers.Add("refs/heads/$protectedBranch") | Out-Null
+        if (-not [string]::IsNullOrWhiteSpace($RemoteName)) {
+            $containers.Add("refs/remotes/$RemoteName/$protectedBranch") | Out-Null
+        }
+    }
+
+    foreach ($container in $containers) {
+        $exists = Invoke-HarnessProcess -Executable "git" -Arguments @("-C", $rootDir, "rev-parse", "--verify", "--quiet", $container) -AllowFailure
+        if (-not $exists.Success) {
+            continue
+        }
+
+        $merged = Invoke-HarnessProcess -Executable "git" -Arguments @("-C", $rootDir, "merge-base", "--is-ancestor", $Update.RemoteSha, $container) -AllowFailure
+        if ($merged.Success) {
+            return
+        }
+    }
+
+    # Unmerged work (abandoned or restarted tasks) needs an explicit user approval
+    # bound to this exact remote head.
+    $approval = Get-GitDeletionApproval -State $state -RootDir $rootDir -Branch $Update.RemoteBranch -Head $Update.RemoteSha -RemoteName $RemoteName
+    if ($null -ne $approval) {
+        return
+    }
+
+    Deny-GitAction ("branch deletion is blocked: $($Update.RemoteBranch) is not merged into $($config.DevBranch) or $($config.MainBranch). " +
+        "If the user wants it deleted, record the approval first: approve_branch_deletion.ps1 -Branch $($Update.RemoteBranch) -Approver <name>")
+}
+
 function Assert-PushUpdateAllowed {
     param(
         [Parameter(Mandatory = $true)]
@@ -110,7 +163,8 @@ function Assert-PushUpdateAllowed {
     )
 
     if ($Update.IsDelete) {
-        Deny-GitAction "branch deletion is blocked by the local workflow: $($Update.RemoteRef)"
+        Assert-PushDeleteAllowed -Update $Update
+        return
     }
 
     if ([string]::IsNullOrWhiteSpace($Update.RemoteBranch)) {
@@ -154,19 +208,10 @@ $headExists = Test-GitHeadExists -RootDir $rootDir
 
 switch ($Action) {
     "commit" {
-        if ($branchInfo.Kind -eq "feature") {
-            try {
-                Assert-SealedGitCandidate -RootDir $rootDir -RequireStagedChanges | Out-Null
-            } catch {
-                Deny-GitAction $_.Exception.Message
-            }
-
-            $treeHash = Get-GitIndexTree -RootDir $rootDir
-            $validation = Get-LatestGitValidation -State $state -Branch $branchInfo.Name -Stage "feature" -Status "pass" -TreeHash $treeHash
-            if ($null -eq $validation) {
-                Deny-GitAction "feature branch commits require a passing feature gate for the exact staged tree. Run: pwsh -NoProfile -File harness/scripts/run_git_gate.ps1 -Stage feature"
-            }
-
+        # Commits on working branches are local and free. Evidence is required where
+        # work leaves the branch: feature push (feature gate), dev merge (integration
+        # gate + promotion) and main merge (final gate + approval).
+        if ($branchInfo.Kind -notin @("main", "dev", "test")) {
             exit 0
         }
 
