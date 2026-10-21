@@ -1,0 +1,55 @@
+name: Harness self-test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safety:
+    name: self-test (${{ matrix.os }}, ${{ matrix.shell }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            shell: pwsh
+          - os: windows-latest
+            shell: powershell
+          - os: ubuntu-latest
+            shell: pwsh
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # steps.shell cannot read the matrix context, so a fixed pwsh step
+      # launches the runtime under test explicitly.
+      - name: Syntax and isolated safety regressions
+        shell: pwsh
+        run: |
+          $arguments = @('-NoProfile')
+          if ($IsWindows) { $arguments += @('-ExecutionPolicy', 'Bypass') }
+          & '${{ matrix.shell }}' @arguments -File ./scripts/test_harness.ps1
+          exit $LASTEXITCODE
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.os }}-${{ matrix.shell }}
+          path: .test-output/**/results.json
+          include-hidden-files: true
+      - name: Read-only dashboard HTTP regression
+        run: python -B scripts/test_harness_dashboard_server.py
+  # Single required status check for the main ruleset.
+  harness-ci:
+    name: Harness CI
+    needs: safety
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every self-test job to pass
+        run: |
+          if [ "${{ needs.safety.result }}" != "success" ]; then
+            echo "self-test result: ${{ needs.safety.result }}"
+            exit 1
+          fi
