@@ -1,10 +1,16 @@
 param(
     [string]$MainBranch,
-    [string]$RulesetName = "Harness Main Protection",
+    # Target branch; defaults to the workflow main branch.
+    [string]$Branch,
+    # Default: "Harness Main Protection" for main, "Harness <branch> Protection" otherwise.
+    [string]$RulesetName,
     [string]$RequiredCheckName = "Harness CI",
     [int]$RequiredApprovals = 1,
     [switch]$RequireCodeOwnerReview,
     [switch]$RequireMergeQueue,
+    # Deletion and force-push protection only, for branches such as dev that are
+    # updated by locally authorized merges. Refused for the main branch.
+    [switch]$ProtectionOnly,
     [string]$RepositoryRoot
 )
 
@@ -24,10 +30,19 @@ $config = Get-GitWorkflowConfig -RootDir $rootDir
 if ([string]::IsNullOrWhiteSpace($MainBranch)) {
     $MainBranch = $config.MainBranch
 }
+if ([string]::IsNullOrWhiteSpace($Branch)) {
+    $Branch = $MainBranch
+}
+if ($ProtectionOnly -and $Branch -eq $MainBranch) {
+    throw "-ProtectionOnly would drop the pull request and status check rules from '$MainBranch'; it is allowed only for other branches"
+}
+if ([string]::IsNullOrWhiteSpace($RulesetName)) {
+    $RulesetName = if ($Branch -eq $MainBranch) { "Harness Main Protection" } else { "Harness $Branch Protection" }
+}
 
 Assert-GitHubCliAuthenticated -RootDir $rootDir
 $repo = Get-GitHubRepositoryInfo -RootDir $rootDir
-$payload = New-HarnessGitHubRulesetPayload -MainBranch $MainBranch -RulesetName $RulesetName -RequiredCheckName $RequiredCheckName -RequiredApprovals $RequiredApprovals -RequireCodeOwnerReview:$RequireCodeOwnerReview -RequireMergeQueue:$RequireMergeQueue
+$payload = New-HarnessGitHubRulesetPayload -MainBranch $Branch -RulesetName $RulesetName -RequiredCheckName $RequiredCheckName -RequiredApprovals $RequiredApprovals -RequireCodeOwnerReview:$RequireCodeOwnerReview -RequireMergeQueue:$RequireMergeQueue -ProtectionOnly:$ProtectionOnly
 
 $reportsDir = Get-GitWorkflowResolvedPath -RootDir $rootDir -Name "reports_dir"
 Ensure-HarnessDirectory -Path $reportsDir
@@ -36,10 +51,18 @@ $payloadPath = Join-Path $reportsDir ("github_ruleset_" + $safeName + ".json")
 Write-Utf8File -Path $payloadPath -Content ($payload | ConvertTo-Json -Depth 20)
 
 $existing = $null
-foreach ($ruleset in (ConvertTo-HarnessObjectArray -Value (Get-GitHubRepositoryRulesetSummaries -RootDir $rootDir))) {
+foreach ($ruleset in (ConvertTo-HarnessObjectArray -Value (Get-GitHubRepositoryRulesetDetails -RootDir $rootDir))) {
     if ([string]$ruleset.name -eq $RulesetName) {
         $existing = $ruleset
         break
+    }
+}
+
+# Never repoint a same-named ruleset that protects another branch.
+if ($null -ne $existing) {
+    $existingIncludes = @($existing.conditions.ref_name.include | ForEach-Object { [string]$_ })
+    if ($existingIncludes.Count -ne 1 -or $existingIncludes[0] -ne ("refs/heads/" + $Branch)) {
+        throw "ruleset '$RulesetName' already targets $($existingIncludes -join ', '); choose another -RulesetName for '$Branch'"
     }
 }
 
@@ -55,7 +78,7 @@ if ($null -eq $existing) {
 
 $result = Invoke-GitHubApi -RootDir $rootDir -Endpoint $endpoint -Method $method -InputFile $payloadPath
 $resultObject = Convert-GitHubJson -JsonText $result.Output -Label "github ruleset install"
-$audit = Get-GitHubPolicyAudit -RootDir $rootDir -MainBranch $MainBranch -RequiredCheckName $RequiredCheckName -RequiredApprovals $RequiredApprovals -RequireCodeOwnerReview:$RequireCodeOwnerReview -RequireMergeQueue:$RequireMergeQueue
+$audit = Get-GitHubPolicyAudit -RootDir $rootDir -MainBranch $Branch -RequiredCheckName $RequiredCheckName -RequiredApprovals $RequiredApprovals -RequireCodeOwnerReview:$RequireCodeOwnerReview -RequireMergeQueue:$RequireMergeQueue -ProtectionOnly:$ProtectionOnly
 
 $reportContent = @"
 # GitHub Ruleset Install
@@ -68,7 +91,8 @@ $reportContent = @"
 - repository_url: $($repo.Url)
 - ruleset_name: $RulesetName
 - ruleset_id: $($resultObject.id)
-- main_branch: $MainBranch
+- branch: $Branch
+- protection_only: $([bool]$ProtectionOnly)
 - required_check: $RequiredCheckName
 - required_approvals: $RequiredApprovals
 - require_code_owner_review: $([bool]$RequireCodeOwnerReview)
@@ -91,7 +115,8 @@ Write-Output "status: $($audit.Status)"
 Write-Output "action: $action"
 Write-Output "repository: $($repo.NameWithOwner)"
 Write-Output "ruleset_id: $($resultObject.id)"
-Write-Output "main_branch: $MainBranch"
+Write-Output "branch: $Branch"
+Write-Output "protection_only: $([bool]$ProtectionOnly)"
 Write-Output "required_check: $RequiredCheckName"
 Write-Output "report: $reportPath"
 

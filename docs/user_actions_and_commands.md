@@ -338,6 +338,8 @@ pwsh -NoProfile -File harness/scripts/merge_authorized_branch.ps1 -SourceBranch 
 pwsh -NoProfile -File harness/scripts/install_github_actions_workflow.ps1
 pwsh -NoProfile -File harness/scripts/audit_github_policy.ps1
 pwsh -NoProfile -File harness/scripts/install_github_ruleset.ps1
+pwsh -NoProfile -File harness/scripts/install_github_ruleset.ps1 -Branch dev -ProtectionOnly
+pwsh -NoProfile -File harness/scripts/audit_github_policy.ps1 -Branch dev -ProtectionOnly
 pwsh -NoProfile -File harness/scripts/open_pr_candidate.ps1 -SourceBranch <test-branch>
 pwsh -NoProfile -File harness/scripts/check_pr_status.ps1 -PullRequest <pr-number-or-branch>
 pwsh -NoProfile -File harness/scripts/merge_pr_if_allowed.ps1 -PullRequest <pr-number-or-branch> -ApprovalId <approval-id>

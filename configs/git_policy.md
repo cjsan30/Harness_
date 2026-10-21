@@ -92,6 +92,7 @@ Bootstrap flow:
 - `merge_pr_if_allowed.ps1` refuses draft, non-main, non-test-branch, stale-head, unapproved, or failing-check PRs before calling `gh pr merge --match-head-commit`.
 - `install_github_actions_workflow.ps1` writes a minimal GitHub Actions workflow that runs portable setup and the full harness cycle in CI mode.
 - `install_github_ruleset.ps1` creates or updates the harness-owned GitHub repository ruleset for protected `main`.
+- `install_github_ruleset.ps1 -Branch dev -ProtectionOnly` adds a separate `dev` ruleset with deletion and force-push protection only. `dev` is updated by locally authorized merges, so it does not require PRs or status checks. `-ProtectionOnly` is refused for `main`.
 - `audit_github_policy.ps1` verifies that an active ruleset protects `main` with PR-only updates, delete and force-push protection, strict required checks, and the configured review count.
 - On Linux/macOS, harness shell validation runs with `bash -e -o pipefail` when Bash is available so failed commands inside pipelines are not treated as passing.
 - `harness/scripts/install_git_hooks.ps1` installs `core.hooksPath` as the repository's absolute `.githooks` path so isolated worktrees always use the shared hooks.

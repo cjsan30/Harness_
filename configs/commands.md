@@ -216,6 +216,9 @@ worker exit requirements and snapshot scope. In a standalone target omit `harnes
   - `pwsh -NoProfile -File harness/scripts/audit_github_policy.ps1`
 - install or update GitHub server ruleset
   - `pwsh -NoProfile -File harness/scripts/install_github_ruleset.ps1`
+- protect dev from deletion and force push (no PR/check rules)
+  - `pwsh -NoProfile -File harness/scripts/install_github_ruleset.ps1 -Branch dev -ProtectionOnly`
+  - audit: `pwsh -NoProfile -File harness/scripts/audit_github_policy.ps1 -Branch dev -ProtectionOnly`
 - open PR candidate for main
   - `pwsh -NoProfile -File harness/scripts/open_pr_candidate.ps1 -SourceBranch <test-branch>`
 - check PR gate status

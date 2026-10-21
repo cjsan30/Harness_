@@ -188,6 +188,81 @@ try {
             Assert-True ($r.Output.Contains('Windows PowerShell 5.1') -and $r.Output.Contains('PowerShell 7')) 'a Windows runtime was skipped'
         }
     }
+
+    # GitHub ruleset installer against a fake gh. Nothing contacts GitHub.
+    . (Join-Path $PSScriptRoot 'github_pr_common.ps1')
+    . (Join-Path $PSScriptRoot 'github_policy_common.ps1')
+    $ghState = Join-Path $testRoot 'fake-gh'
+    Ensure-HarnessDirectory $ghState
+    $fakeGh = Join-Path $testRoot 'fake-gh.ps1'
+    Write-Utf8File $fakeGh @'
+$state = $env:HARNESS_TEST_GH_STATE
+Add-Content -LiteralPath (Join-Path $state 'calls.log') -Value ($args -join ' ')
+$rulesets = @()
+foreach ($item in (Get-Content -Raw -LiteralPath (Join-Path $state 'rulesets.json') | ConvertFrom-Json)) { $rulesets += $item }
+if ($args[0] -eq 'auth') { 'Logged in to github.com'; exit 0 }
+if ($args[0] -eq 'repo' -and $args[1] -eq 'view') { '{"nameWithOwner":"fixture/repo","defaultBranchRef":{"name":"main"},"url":"https://example.invalid/fixture/repo"}'; exit 0 }
+if ($args[0] -ne 'api') { exit 1 }
+$endpoint = $args[1]; $method = 'GET'; $inputFile = $null
+for ($i = 2; $i -lt $args.Count; $i++) { if ($args[$i] -eq '--method') { $method = $args[$i + 1] }; if ($args[$i] -eq '--input') { $inputFile = $args[$i + 1] } }
+if ($method -eq 'GET' -and $endpoint -eq 'repos/{owner}/{repo}/rulesets') { ConvertTo-Json -InputObject @($rulesets | ForEach-Object { [pscustomobject]@{ id = $_.id; name = $_.name } }) -Depth 5; exit 0 }
+if ($method -eq 'GET' -and $endpoint -match '/rulesets/(\d+)$') { $rulesets | Where-Object { [string]$_.id -eq $Matches[1] } | ConvertTo-Json -Depth 20; exit 0 }
+if ($method -eq 'POST' -or $method -eq 'PUT') {
+    $body = Get-Content -Raw -LiteralPath $inputFile | ConvertFrom-Json
+    $body | Add-Member -NotePropertyName id -NotePropertyValue 900 -Force
+    Copy-Item -LiteralPath $inputFile -Destination (Join-Path $state ($method.ToLowerInvariant() + '.json'))
+    $all = @($rulesets | Where-Object { [string]$_.id -ne '900' }) + @($body)
+    [IO.File]::WriteAllText((Join-Path $state 'rulesets.json'), (ConvertTo-Json -InputObject $all -Depth 20))
+    $body | ConvertTo-Json -Depth 20; exit 0
+}
+exit 1
+'@
+    $mainRuleset = [pscustomobject]@{ id = 100; name = 'Harness Main Protection'; target = 'branch'; enforcement = 'active'; conditions = @{ ref_name = @{ include = @('refs/heads/main'); exclude = @() } }; rules = @(@{ type = 'deletion' }, @{ type = 'non_fast_forward' }, @{ type = 'pull_request'; parameters = @{ required_approving_review_count = 0 } }, @{ type = 'required_status_checks'; parameters = @{ strict_required_status_checks_policy = $true; required_status_checks = @(@{ context = 'Harness CI' }) } }) }
+    function Reset-FakeGh([object[]]$Rulesets) {
+        Get-ChildItem -LiteralPath $ghState -File | Remove-Item -Force
+        [IO.File]::WriteAllText((Join-Path $ghState 'rulesets.json'), (ConvertTo-Json -InputObject @($Rulesets) -Depth 20))
+        Write-Utf8File (Join-Path $ghState 'calls.log') ''
+    }
+    function Invoke-RulesetInstall([string[]]$Arguments) {
+        $previousGh = $env:HARNESS_GH_PATH; $previousState = $env:HARNESS_TEST_GH_STATE
+        try {
+            $env:HARNESS_GH_PATH = $fakeGh; $env:HARNESS_TEST_GH_STATE = $ghState
+            return Invoke-HarnessPowerShellFile -FilePath (Join-Path $self 'scripts/install_github_ruleset.ps1') -Arguments (@('-RepositoryRoot', $self) + $Arguments) -AllowFailure
+        } finally { $env:HARNESS_GH_PATH = $previousGh; $env:HARNESS_TEST_GH_STATE = $previousState }
+    }
+
+    Test-Case 'protection-only ruleset payload keeps only deletion and force-push rules' {
+        $types = @((New-HarnessGitHubRulesetPayload -MainBranch 'dev' -ProtectionOnly).rules | ForEach-Object { $_.type })
+        Assert-True (($types -join ',') -eq 'deletion,non_fast_forward') "protection-only rules: $($types -join ',')"
+        $full = @((New-HarnessGitHubRulesetPayload -MainBranch 'main').rules | ForEach-Object { $_.type })
+        Assert-True ($full -contains 'pull_request' -and $full -contains 'required_status_checks') "main rules: $($full -join ',')"
+    }
+    Test-Case 'protection-only install is refused for main before contacting GitHub' {
+        Reset-FakeGh @($mainRuleset)
+        $r = Invoke-RulesetInstall @('-ProtectionOnly')
+        Assert-True (-not $r.Success) 'main protection-only install succeeded'
+        Assert-True ($r.Output.Contains('-ProtectionOnly would drop the pull request')) "unexpected reason: $($r.Output)"
+        Assert-True ([string]::IsNullOrWhiteSpace([IO.File]::ReadAllText((Join-Path $ghState 'calls.log')))) 'gh was called'
+    }
+    Test-Case 'dev protection ruleset is created separately and audits as protection only' {
+        Reset-FakeGh @($mainRuleset)
+        $r = Invoke-RulesetInstall @('-Branch', 'dev', '-ProtectionOnly')
+        Assert-True $r.Success $r.Output
+        Assert-True ($r.Output.Contains('action: created') -and $r.Output.Contains('status: pass')) "install output: $($r.Output)"
+        $posted = Get-Content -Raw -LiteralPath (Join-Path $ghState 'post.json') | ConvertFrom-Json
+        Assert-True ($posted.name -eq 'Harness dev Protection') "ruleset name: $($posted.name)"
+        Assert-True (@($posted.conditions.ref_name.include) -join ',' -eq 'refs/heads/dev') 'ruleset does not target dev only'
+        Assert-True ((@($posted.rules | ForEach-Object { $_.type }) -join ',') -eq 'deletion,non_fast_forward') 'dev ruleset has PR or check rules'
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $ghState 'put.json'))) 'main ruleset was modified'
+    }
+    Test-Case 'installer never repoints a same-named ruleset protecting another branch' {
+        $conflict = $mainRuleset.PSObject.Copy(); $conflict.id = 101; $conflict.name = 'Harness dev Protection'
+        Reset-FakeGh @($mainRuleset, $conflict)
+        $r = Invoke-RulesetInstall @('-Branch', 'dev', '-ProtectionOnly')
+        Assert-True (-not $r.Success) 'conflicting ruleset was overwritten'
+        Assert-True ($r.Output.Contains('already targets refs/heads/main')) "unexpected reason: $($r.Output)"
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $ghState 'put.json')) -and -not (Test-Path -LiteralPath (Join-Path $ghState 'post.json'))) 'a ruleset write happened'
+    }
 } finally {
     $env:CODEX_HARNESS_ROOT = $previousRoot
     $env:CODEX_GIT_WORKSPACE_ROOT = $previousWorkspace

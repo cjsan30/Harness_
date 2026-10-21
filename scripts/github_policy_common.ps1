@@ -237,7 +237,10 @@ function Get-GitHubPolicyAudit {
         [string]$RequiredCheckName = $script:HarnessGitHubRequiredCheckName,
         [int]$RequiredApprovals = 1,
         [switch]$RequireCodeOwnerReview,
-        [switch]$RequireMergeQueue
+        [switch]$RequireMergeQueue,
+        # Deletion and force-push protection only (e.g. dev, which is updated by
+        # locally authorized merges and therefore cannot require PRs or checks).
+        [switch]$ProtectionOnly
     )
 
     $repo = Get-GitHubRepositoryInfo -RootDir $RootDir
@@ -252,7 +255,7 @@ function Get-GitHubPolicyAudit {
     if ([string]::IsNullOrWhiteSpace($repo.NameWithOwner)) {
         $issues.Add("GitHub repository could not be resolved from the current directory") | Out-Null
     }
-    if (-not [string]::IsNullOrWhiteSpace($repo.DefaultBranch) -and $repo.DefaultBranch -ne $MainBranch) {
+    if (-not $ProtectionOnly -and -not [string]::IsNullOrWhiteSpace($repo.DefaultBranch) -and $repo.DefaultBranch -ne $MainBranch) {
         $warnings.Add("GitHub default branch '$($repo.DefaultBranch)' differs from harness main branch '$MainBranch'") | Out-Null
     }
     if ($matchingRulesets.Count -eq 0) {
@@ -267,7 +270,9 @@ function Get-GitHubPolicyAudit {
     }
 
     $pullRequestRules = ConvertTo-HarnessObjectArray -Value (Get-GitHubRulesByType -Rulesets $matchingRulesets -Type "pull_request")
-    if ($pullRequestRules.Count -eq 0) {
+    if ($ProtectionOnly) {
+        # PR, status check, merge queue and workflow requirements do not apply.
+    } elseif ($pullRequestRules.Count -eq 0) {
         $issues.Add("missing pull request requirement for '$MainBranch'") | Out-Null
     } else {
         $approvalOk = $false
@@ -308,7 +313,9 @@ function Get-GitHubPolicyAudit {
     }
 
     $statusRules = ConvertTo-HarnessObjectArray -Value (Get-GitHubRulesByType -Rulesets $matchingRulesets -Type "required_status_checks")
-    if ($statusRules.Count -eq 0) {
+    if ($ProtectionOnly) {
+        # not required for a protection-only branch
+    } elseif ($statusRules.Count -eq 0) {
         $issues.Add("missing required status checks for '$MainBranch'") | Out-Null
     } else {
         if (-not (Test-GitHubRulesHaveRequiredCheck -Rules $statusRules -RequiredCheckName $RequiredCheckName)) {
@@ -319,12 +326,12 @@ function Get-GitHubPolicyAudit {
         }
     }
 
-    if ($RequireMergeQueue -and (Get-GitHubRulesByType -Rulesets $matchingRulesets -Type "merge_queue").Count -eq 0) {
+    if (-not $ProtectionOnly -and $RequireMergeQueue -and (Get-GitHubRulesByType -Rulesets $matchingRulesets -Type "merge_queue").Count -eq 0) {
         $issues.Add("merge queue is required but no merge_queue rule targets '$MainBranch'") | Out-Null
     }
 
     $workflowPath = Resolve-ProjectPath -RootDir $RootDir -ProjectPath ".github/workflows/harness-ci.yml" -Label "github actions workflow"
-    if (-not (Test-Path -LiteralPath $workflowPath)) {
+    if (-not $ProtectionOnly -and -not (Test-Path -LiteralPath $workflowPath)) {
         $warnings.Add("local .github/workflows/harness-ci.yml is missing; install it before relying on '$RequiredCheckName'") | Out-Null
     }
 
@@ -336,6 +343,7 @@ function Get-GitHubPolicyAudit {
         RequiredApprovals = $RequiredApprovals
         RequireCodeOwnerReview = [bool]$RequireCodeOwnerReview
         RequireMergeQueue = [bool]$RequireMergeQueue
+        ProtectionOnly = [bool]$ProtectionOnly
         Rulesets = $rulesets
         MatchingRulesets = $matchingRulesets
         Issues = $issues.ToArray()
@@ -351,49 +359,52 @@ function New-HarnessGitHubRulesetPayload {
         [string]$RequiredCheckName = $script:HarnessGitHubRequiredCheckName,
         [int]$RequiredApprovals = 1,
         [switch]$RequireCodeOwnerReview,
-        [switch]$RequireMergeQueue
+        [switch]$RequireMergeQueue,
+        [switch]$ProtectionOnly
     )
 
     $rules = New-Object System.Collections.Generic.List[object]
     $rules.Add([ordered]@{ type = "deletion" }) | Out-Null
     $rules.Add([ordered]@{ type = "non_fast_forward" }) | Out-Null
-    $rules.Add([ordered]@{
-            type = "pull_request"
-            parameters = [ordered]@{
-                allowed_merge_methods = @("merge", "squash", "rebase")
-                dismiss_stale_reviews_on_push = $true
-                require_code_owner_review = [bool]$RequireCodeOwnerReview
-                require_last_push_approval = $false
-                required_approving_review_count = $RequiredApprovals
-                required_review_thread_resolution = $true
-            }
-        }) | Out-Null
-    $rules.Add([ordered]@{
-            type = "required_status_checks"
-            parameters = [ordered]@{
-                do_not_enforce_on_create = $false
-                strict_required_status_checks_policy = $true
-                required_status_checks = @(
-                    [ordered]@{
-                        context = $RequiredCheckName
-                    }
-                )
-            }
-        }) | Out-Null
-
-    if ($RequireMergeQueue) {
+    if (-not $ProtectionOnly) {
         $rules.Add([ordered]@{
-                type = "merge_queue"
+                type = "pull_request"
                 parameters = [ordered]@{
-                    check_response_timeout_minutes = 60
-                    grouping_strategy = "ALLGREEN"
-                    max_entries_to_build = 5
-                    max_entries_to_merge = 1
-                    merge_method = "MERGE"
-                    min_entries_to_merge = 1
-                    min_entries_to_merge_wait_minutes = 0
+                    allowed_merge_methods = @("merge", "squash", "rebase")
+                    dismiss_stale_reviews_on_push = $true
+                    require_code_owner_review = [bool]$RequireCodeOwnerReview
+                    require_last_push_approval = $false
+                    required_approving_review_count = $RequiredApprovals
+                    required_review_thread_resolution = $true
                 }
             }) | Out-Null
+        $rules.Add([ordered]@{
+                type = "required_status_checks"
+                parameters = [ordered]@{
+                    do_not_enforce_on_create = $false
+                    strict_required_status_checks_policy = $true
+                    required_status_checks = @(
+                        [ordered]@{
+                            context = $RequiredCheckName
+                        }
+                    )
+                }
+            }) | Out-Null
+
+        if ($RequireMergeQueue) {
+            $rules.Add([ordered]@{
+                    type = "merge_queue"
+                    parameters = [ordered]@{
+                        check_response_timeout_minutes = 60
+                        grouping_strategy = "ALLGREEN"
+                        max_entries_to_build = 5
+                        max_entries_to_merge = 1
+                        merge_method = "MERGE"
+                        min_entries_to_merge = 1
+                        min_entries_to_merge_wait_minutes = 0
+                    }
+                }) | Out-Null
+        }
     }
 
     return [ordered]@{
