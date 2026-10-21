@@ -33,7 +33,8 @@
     "max_attempts_per_assignment": null,
     "max_concurrent_workers": null,
     "max_total_tokens": null,
-    "max_total_duration_seconds": null
+    "max_total_duration_seconds": null,
+    "max_invocation_seconds": null
   },
   "commands": {
     "build": "replace-with-build-command",

@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'secret_redaction.ps1')
 . (Join-Path $PSScriptRoot 'assignment_state.ps1')
 . (Join-Path $PSScriptRoot 'harness_layout.ps1')
 . (Join-Path $PSScriptRoot 'provider_codex.ps1')

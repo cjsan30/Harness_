@@ -15,7 +15,7 @@
 - `billing_mode`는 프로필의 선언값이며 인증을 조회해 판단하지 않습니다. 실제 청구액은 `actual_cost_usd: null`입니다.
 - 이벤트 누락·잘못된 수치·깨진 JSON·실패 종료·미완료 turn은 `usage.status: unknown`, 토큰은 `null`입니다. 0으로 바꾸지 않습니다.
 - 재시도도 새 invocation ID로 보존하며 같은 owner/assignment의 시도 번호를 증가시킵니다.
-- ledger에는 프롬프트·도구 출력·credential을 복사하지 않습니다. 기존 raw 실행 로그의 범용 비밀값 마스킹은 아직 구현하지 않았습니다.
+- ledger에는 프롬프트·도구 출력·credential을 복사하지 않습니다. 2026-10-21부터 worker 실행 로그, git gate 로그, 검증 사이클 단계 로그, assignment 검증 증거 로그는 쓰기 전에 `Protect-HarnessSecretText`(`secret_redaction.ps1`)로 비밀값을 `[REDACTED]`로 바꿉니다. 대상은 알려진 토큰 형식(sk-, ghp_, github_pat_, glpat-, xox, AKIA, AIza, JWT), Bearer/Basic 헤더, URL 사용자 정보, 이름에 key/secret/token/password가 들어간 JSON·대입 값, 개인 키 블록, 이름이 민감해 보이는 환경 변수의 실제 값입니다. 숫자·true/false/null 값은 바꾸지 않으므로 `input_tokens` 같은 사용량 수치는 유지됩니다. 패턴 기반이라 임의 형식의 비밀값까지 보장하지는 않습니다.
 
 ## 정책
 
@@ -29,7 +29,8 @@
     "max_attempts_per_assignment": 3,
     "max_concurrent_workers": 1,
     "max_total_tokens": 500000,
-    "max_total_duration_seconds": 3600
+    "max_total_duration_seconds": 3600,
+    "max_invocation_seconds": 1800
   }
 }
 ```
@@ -42,10 +43,11 @@
 | max_concurrent_workers | 완료되지 않은 예약 개수 상한. 죽었는지 확인되지 않은 예약도 점유 |
 | max_total_tokens | 확인된 누적 입력+출력 토큰이 한도 이상이면 다음 실행 거부 |
 | max_total_duration_seconds | 완료된 프로세스 실행 시간 합이 한도 이상이면 다음 실행 거부 |
+| max_invocation_seconds | **실행 1회의 벽시계 시간 상한.** 넘으면 실행 중인 provider 프로세스 트리를 종료합니다. `null`(제한 없음) 또는 1 이상의 정수 |
 
-한도는 `null` 또는 음이 아닌 정수입니다. `0`은 실행 금지입니다. 알 수 없는 필드·잘못된 타입은 preflight와 실행에서 거부합니다. 프로필 캐시에 가려지지 않도록 예약 시 최신 파일을 읽습니다.
+한도는 `null` 또는 음이 아닌 정수입니다. `0`은 실행 금지입니다(`max_invocation_seconds`만 예외로 1 이상). 알 수 없는 필드·잘못된 타입은 preflight와 실행에서 거부합니다. 프로필 캐시에 가려지지 않도록 예약 시 최신 파일을 읽습니다.
 
-토큰·시간은 **다음 실행의 시작을 제한**합니다. 실행 중인 worker를 종료하지 않으므로 한 번의 실행이 남은 한도를 초과할 수 있습니다. 토큰 제한을 켠 상태에서 하나라도 사용량이 unknown/reserved면 새 실행을 차단합니다. 시간 제한은 reserved가 남으면 차단합니다. 따라서 이 두 제한을 사용하면 사용량이 확정되기 전에는 동시에 다음 worker를 시작하지 않습니다.
+누적 토큰·시간은 **다음 실행의 시작을 제한**합니다. 한 번의 실행이 남은 누적 한도를 넘을 수 있으므로, 실행 1회의 상한은 `max_invocation_seconds`로 둡니다. 이 값은 예약할 때 worker intent(`timeout_seconds`)에 묶여 실행 중 프로필이 바뀌어도 달라지지 않습니다. worker host는 별도 watchdog(`worker_timeout_watchdog.ps1`)을 띄우고, 시간이 지나면 watchdog이 timeout을 먼저 기록한 뒤 host의 하위 프로세스(provider 트리)만 종료합니다. host는 살아남아 종료를 확정 기록합니다(`timed_out: true`, `exit_code: 124`, provider 결과 failed/`process_exit`, 사용량 unknown). watchdog은 host PID의 시작 시각이 기록과 같을 때만 동작하므로 재사용된 PID는 건드리지 않습니다. 토큰 제한을 켠 상태에서 하나라도 사용량이 unknown/reserved면 새 실행을 차단합니다. 시간 제한은 reserved가 남으면 차단합니다. 따라서 이 두 제한을 사용하면 사용량이 확정되기 전에는 동시에 다음 worker를 시작하지 않습니다.
 
 ## 조회와 복구
 
@@ -56,7 +58,7 @@ pwsh -NoProfile -File scripts/get_execution_usage.ps1
 pwsh -NoProfile -File scripts/get_execution_usage.ps1 -Json
 ```
 
-범위는 **현재 프로젝트 ledger에 보존된 모든 실행**입니다. 시간대별/월별 자동 초기화는 없습니다. 다른 Codex 세션·CLI·ChatGPT에서 쓴 양과 구독의 5시간/주간 잔여량을 나타내지 않습니다. 돈 단위 예산, 실시간 강제 timeout/process-tree 종료 및 Claude 사용량 수집은 후속 과제입니다.
+범위는 **현재 프로젝트 ledger에 보존된 모든 실행**입니다. 시간대별/월별 자동 초기화는 없습니다. 다른 Codex 세션·CLI·ChatGPT에서 쓴 양과 구독의 5시간/주간 잔여량을 나타내지 않습니다. 돈 단위 예산과 Claude 사용량 수집은 후속 과제입니다. 실행 중 토큰 상한(스트림을 읽으며 끊기)도 없습니다.
 
 예약 후 intent 저장 또는 spawn 전에 중단돼도 예약은 보존됩니다. 과금이 없었다고 추측하여 자동 환불하지 않습니다. ledger 쓰기 충돌/손상으로 완료 저장이 실패하면 worker는 기존 복구 정책에 따라 격리됩니다. 불확실한 기록을 지워 재실행하지 마세요. 검토 후 기록 조정 명령은 아직 없습니다. 기존 설치의 이 버전 이전 실행은 소급 집계하지 않으며, 업그레이드 전에 기존 worker를 종료·확인해야 합니다.
 

@@ -175,6 +175,8 @@ function New-AssignmentWorkerIntent {
         executable=$Executable; arguments=@($Arguments); prompt_file=$PromptFile; log_file=$LogFile; execution_root=$ExecutionRoot
         worker_pid=$null; worker_started_at=$null; exit_code=$null
         provider_contract=$ProviderContract; provider_result=$null
+        # Bound into the durable intent so the worker host does not re-read a changed profile.
+        timeout_seconds=(Get-HarnessExecutionPolicy $RootDir).max_invocation_seconds; timed_out=$false
     }
     # Reserve before spawn/intent publication. An interrupted reservation remains
     # charged; it is never silently refunded on an unconfirmed process exit.

@@ -28,7 +28,7 @@ function Invoke-Step {
     )
 
     $result = Invoke-HarnessValidationCommand -RootDir $rootDir -Command $Command
-    Write-Utf8File -Path $LogFile -Content $result.Output
+    Write-Utf8File -Path $LogFile -Content (Protect-HarnessSecretText $result.Output)
     return $result.Success
 }
 

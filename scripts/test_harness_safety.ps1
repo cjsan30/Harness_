@@ -160,6 +160,39 @@ exit 1
         Assert-True ($r.Output.Contains('merge requires an authorization')) 'merge failed for an unrelated reason'
         Assert-True ((Invoke-HarnessProcess git @('-C', $fixture, 'rev-parse', 'HEAD')).Output.Trim() -eq $head) 'merge changed HEAD'
     }
+    Test-Case 'runtime output masks credentials but keeps usage counters' {
+        $previousEnvSecret = $env:FIXTURE_SERVICE_TOKEN
+        try {
+            $env:FIXTURE_SERVICE_TOKEN = 'plainvalue-from-environment-7391'
+            $samples = @(
+                'key sk-proj-abcdefghijklmnopqrstuvwx1234',
+                'gh token ghp_abcdefghijklmnopqrstuvwxyz0123456789',
+                'Authorization: Bearer abcdefghijklmnop.qrstuvwx',
+                'clone https://user:hunter2secret@example.invalid/repo.git',
+                '{"api_key":"fixture-json-secret-value","model":"m"}',
+                'DATABASE_PASSWORD=fixture-assignment-secret',
+                "-----BEGIN RSA PRIVATE KEY-----`nMIIfixturekeymaterial`n-----END RSA PRIVATE KEY-----",
+                'echo plainvalue-from-environment-7391'
+            )
+            $leaks = @('abcdefghijklmnopqrstuvwx1234', 'abcdefghijklmnopqrstuvwxyz0123456789', 'abcdefghijklmnop.qrstuvwx', 'hunter2secret', 'fixture-json-secret-value', 'fixture-assignment-secret', 'MIIfixturekeymaterial', 'plainvalue-from-environment-7391')
+            for ($i = 0; $i -lt $samples.Count; $i++) {
+                $masked = Protect-HarnessSecretText $samples[$i]
+                Assert-True (-not $masked.Contains($leaks[$i])) "secret survived masking: $masked"
+                Assert-True ($masked.Contains('[REDACTED]')) "no redaction marker: $masked"
+            }
+            $usage = '{"type":"turn.completed","usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":20}}'
+            Assert-True ((Protect-HarnessSecretText $usage) -ceq $usage) 'usage counters were altered'
+            Assert-True ((Protect-HarnessSecretText '{"model":"m","max_tokens":null}') -ceq '{"model":"m","max_tokens":null}') 'null setting was altered'
+        } finally { $env:FIXTURE_SERVICE_TOKEN = $previousEnvSecret }
+    }
+    Test-Case 'git gate logs mask credentials printed by the gate command' {
+        $logPath = Join-Path $testRoot 'gate-mask.log'
+        $result = Invoke-LoggedShellCommand -RootDir $fixture -CommandText 'git --version && echo token=fixture-gate-secret-value-42' -LogPath $logPath
+        Assert-True $result.Success $result.Output
+        $text = [IO.File]::ReadAllText($logPath)
+        Assert-True (-not $text.Contains('fixture-gate-secret-value-42') -and -not $result.Output.Contains('fixture-gate-secret-value-42')) "gate output leaked: $text"
+        Assert-True ($text.Contains('git version')) 'ordinary gate output was lost'
+    }
     Test-Case 'manifest never copies secret section values' {
         $intake = "## Project`n- language: python`n- framework: none`n## Requirements`nA fixture application.`n## Prepared Data`nnone`n## External Dependencies`nnone`n## Secrets And Access`n- SERVICE_TOKEN=FAKE_SENSITIVE_VALUE_7391`n- password: arbitrary-private-text-7391`n- prose private content 7391`n"
         Write-Utf8File (Join-Path $fixture 'intake.md') $intake

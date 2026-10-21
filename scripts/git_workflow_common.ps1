@@ -1140,7 +1140,8 @@ function Invoke-LoggedShellCommand {
     Push-Location -LiteralPath $RootDir
     try {
         $result = Invoke-HarnessShellCommand -RootDir $RootDir -CommandText $resolvedCommandText -AllowFailure
-        $text = $result.Output
+        # Gate logs land in reports and console output; mask credentials first.
+        $text = Protect-HarnessSecretText $result.Output
         Write-Utf8File -Path $LogPath -Content $text
         return [pscustomobject]@{
             ExitCode = $result.ExitCode
