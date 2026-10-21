@@ -16,8 +16,9 @@ function Get-HarnessSensitiveEnvironmentValues {
         if ($value.Length -lt 8 -or $value -match '^\d+$' -or $value -match '^(?i:true|false|null|none)$') { continue }
         $values.Add($value) | Out-Null
     }
-    # Longest first so a value containing another is masked whole.
-    return @($values | Sort-Object -Property Length -Descending -Unique)
+    # Longest first so a value containing another is masked whole. Deduplicate by
+    # value first: Sort-Object -Unique with -Property drops equal-length values in PS7.
+    return @($values | Select-Object -Unique | Sort-Object -Property Length -Descending)
 }
 
 function Test-HarnessRedactableValue([string]$Value) {
