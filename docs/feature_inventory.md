@@ -135,12 +135,12 @@ Git remote 접근, gh CLI 인증, 선택적 GitHub API 접근을 별도 상태�
 
 ## 13. GitHub 서버 보호 규칙
 
-main 대상 ruleset 생성·갱신·감사, 삭제/강제 push 제한, PR·승인 수·strict required check, 선택적 code owner review와 merge queue 설정을 제공합니다.
+main 대상 ruleset 생성·갱신·감사, 삭제/강제 push 제한, PR·승인 수·strict required check, 선택적 code owner review와 merge queue 설정을 제공합니다. `-Branch dev -ProtectionOnly`는 dev처럼 로컬 승인 merge로 갱신되는 브랜치에 삭제·강제 push 금지만 거는 별도 ruleset(`Harness dev Protection`)을 만들며, main에는 거부되고 다른 브랜치를 보호하는 같은 이름 ruleset을 덮어쓰지 않습니다.
 
 | 구현 파일 | 역할 |
 | --- | --- |
-| [install_github_ruleset.ps1](../scripts/install_github_ruleset.ps1) | GitHub API를 통한 ruleset 설치/갱신 |
-| [audit_github_policy.ps1](../scripts/audit_github_policy.ps1) | 저장소 ruleset과 요구 정책의 일치 여부 검사 |
+| [install_github_ruleset.ps1](../scripts/install_github_ruleset.ps1) | GitHub API를 통한 ruleset 설치/갱신 (`-Branch`, `-ProtectionOnly`) |
+| [audit_github_policy.ps1](../scripts/audit_github_policy.ps1) | 저장소 ruleset과 요구 정책의 일치 여부 검사 (`-Branch`, `-ProtectionOnly`) |
 
 ## 14. 개발 환경 생성
 
@@ -252,7 +252,7 @@ JSON 프로필과 Markdown 상태, UTF-8 쓰기, 경로 제한, 프로세스 실
 | --- | --- |
 | [test_harness.ps1](../scripts/test_harness.ps1) | PowerShell 구문·JSON 검사와 안전성 테스트의 공통 진입점 |
 | [test_harness_safety.ps1](../scripts/test_harness_safety.ps1) | 격리 Git 저장소, fake GitHub CLI, 별도 프로세스로 승인·민감정보·잠금·원자적 저장 검증 |
-| [test_git_workflow_policy.ps1](../scripts/test_git_workflow_policy.ps1) | 브랜치 이름 기본값, 자체 정책 적용 범위, gate 명령 fail-closed, 커밋 규칙, 병합된 브랜치 원격 삭제·승인된 미병합 브랜치 삭제 검증 |
+| [test_git_workflow_policy.ps1](../scripts/test_git_workflow_policy.ps1) | 브랜치 이름 기본값, 자체 정책 적용 범위, gate 명령 fail-closed, 커밋 규칙, 병합된 브랜치 원격 삭제·승인된 미병합 브랜치 삭제, fake gh로 dev 보호 ruleset 생성·main 보호 유지 검증 |
 | [test_lock_child.ps1](../scripts/test_lock_child.ps1) | 강제 종료·동시 잠금 테스트 전용 자식 프로세스 |
 | [intake_safety.ps1](../scripts/intake_safety.ps1) | 민감정보 구역에서 변수 이름만 전달하고 다른 구역의 흔한 credential 패턴 차단 |
 
