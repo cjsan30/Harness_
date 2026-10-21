@@ -42,6 +42,9 @@ try {
         $watchdogArguments = @('-NoProfile')
         if (Test-HarnessIsWindows) { $watchdogArguments += @('-ExecutionPolicy', 'Bypass') }
         $watchdogArguments += @('-File', (Join-Path $PSScriptRoot 'worker_timeout_watchdog.ps1'), '-HostPid', [string]$PID, '-HostStartedAt', $record.worker_started_at, '-TimeoutSeconds', [string]$timeoutSeconds, '-TimeoutMarker', $timeoutMarker, '-DoneMarker', $doneMarker)
+        if ($null -ne $record.PSObject.Properties['worker_process_identity'] -and -not [string]::IsNullOrWhiteSpace($record.worker_process_identity)) {
+            $watchdogArguments += @('-HostIdentity', [string]$record.worker_process_identity)
+        }
         # ProcessStartInfo, not Start-Process: a working directory with [ ] would be
         # treated as a wildcard, and inherited std handles would hold the parent's pipe.
         $startInfo = New-Object Diagnostics.ProcessStartInfo
