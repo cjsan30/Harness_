@@ -3,7 +3,7 @@
 이 문서는 **유일한 인계 문서**입니다. 세션을 시작할 때 이 문서만 먼저 읽고, 세션을 마칠 때 이 문서의 "최근 변경"과 "다음 작업"을 갱신하세요.
 새 인계 문서(SESSION_HANDOFF, next_session_prompt, conversation_history 등)를 만들지 않습니다. 과거 기록은 [archive/](archive/)에 있습니다.
 
-- 최종 갱신: 2026-10-21 (Claude Code P0 정리 세션)
+- 최종 갱신: 2026-10-22 (안전장치·main 최초 반영)
 - 작업 루트: `C:\Users\lAte\develop\Harness_`
 - 원격: `https://github.com/cjsan30/Harness_.git` (기본 `main`, 작업 브랜치 `dev`)
 
@@ -37,7 +37,8 @@
 모든 수치는 실행 당시 기록이며, 서로 다른 실행을 한 번의 전체 실행으로 합산하지 않습니다.
 
 - 소스 규모: PowerShell 89개 + shell 19개, Python 2개, 브라우저 회귀 JS 1개 (2026-10-21, `run_self_gate.ps1`·`approve_branch_deletion.ps1`·`test_git_workflow_policy.ps1` 추가 후)
-- **2026-10-21 integration gate (커밋 `2e5be71`, `run_self_gate.ps1 -Stage integration`):** Windows PowerShell 5.1 **290/290**, PowerShell 7.6.7 **290/290**, FAIL 0. 정책 suite 11건 포함. feature gate(두 런타임 구문 검사)도 통과
+- **2026-10-22 main 최초 반영:** final gate(`test/initial-main-20261022`, tree `f00a4ac`) Windows PowerShell 5.1 298/298, PowerShell 7 298/298, 현황판 HTTP 8/8. PR [#1](https://github.com/cjsan30/Harness_/pull/1)의 CI 8개 check(push·PR 각각 Windows PS7, Windows PS5.1, Ubuntu PS7, Harness CI) 모두 통과 후 merge(`3ac50cf`). `audit_git_workflow.ps1` pass. `main` 파일 177개
+- 2026-10-21 integration gate (커밋 `2e5be71`, `run_self_gate.ps1 -Stage integration`):** Windows PowerShell 5.1 **290/290**, PowerShell 7.6.7 **290/290**, FAIL 0. 정책 suite 11건 포함. feature gate(두 런타임 구문 검사)도 통과
 - 2026-10-21 전체 회귀 (Git 정책 개편 후, 삭제 승인 추가 전): Windows PowerShell 5.1 **289/289**, PowerShell 7.6.7 **289/289**, FAIL 0. 이전 279건 + 정책 테스트 10건(`test_git_workflow_policy.ps1`)
 - 2026-10-21 전체 회귀 (Windows PowerShell 5.1, P0 정리 직후·정책 개편 전): 279/279 통과, FAIL 0. 구성: 구문 86개 스크립트·JSON 통과, safety 23, recovery 16, usage 18, evidence 28, layout 15, CLI 25, provider 22, Claude 38, shell 36, 진입점 30, 현황판 28. 같은 날 현황판 HTTP(Windows Python) 8/8
 - 2026-10-21 전체 회귀 (PowerShell 7.6.7, P0 정리 직후·정책 개편 전): 279/279 통과, FAIL 0. 구성은 PS5.1과 동일. PS7은 이 날 winget으로 설치(MSIX, `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` 실행 별칭)
@@ -64,6 +65,10 @@
 
 ## 5. 최근 변경
 
+- 2026-10-22: `main`의 PR merge commit(`3ac50cf`)을 `dev`에 되돌려 넣음(feature 브랜치에서 fast-forward 후 승인된 merge). 이제 `dev`가 `main`을 포함하므로 다음 `main` PR은 `main`을 따로 merge하지 않아도 strict 규칙을 만족. 자체 CI workflow의 `actions/checkout`·`actions/upload-artifact`를 v4→v7(Node 24)로 갱신. GitHub 릴리스 노트 확인 결과 사용 중인 옵션(`path` glob, `include-hidden-files`)에 영향 없음
+- 2026-10-22: `main` 최초 반영. `main`(빈 커밋 `e82d290`)과 엔진 기록(`ce933c3`)이 서로 다른 root commit이라 PR 생성이 거부되어, `test` 브랜치에서 `--allow-unrelated-histories`로 연결(`53dc919`, 파일 변화 없음) 후 승인 재기록 → PR #1 → `merge_pr_if_allowed.ps1`로 merge. main ruleset이 CI 통과 전 merge를 실제로 막는 것(`BLOCKED`) 확인. 병합된 feature/test 원격 브랜치를 hook을 통해 삭제
+- 2026-10-22: Ubuntu CI에서 timeout watchdog 실패 발견(60초 hang이 끝까지 실행). Linux의 .NET `StartTime`이 프로세스마다 다르게 계산되어 watchdog이 host가 사라졌다고 오판. Linux는 `/proc` 식별값(`worker_process_identity`)으로 비교하도록 수정(`c87309c`), feature 브랜치 CI로 Ubuntu 통과 확인 후 반영
+- 2026-10-21: integration gate PS7에서 비밀값 마스킹 실패 발견. `Sort-Object -Property Length -Unique`가 PS7에서 길이가 같은 값을 버림 → 값 기준 중복 제거 후 정렬로 수정(`2f9dd7d`)
 - 2026-10-21: 실제 유료 실행 전 안전장치. (1) `execution_policy.max_invocation_seconds`: 실행 1회 시간 상한, worker host가 띄운 `worker_timeout_watchdog.ps1`이 초과 시 provider 프로세스 트리만 종료하고 host는 `timed_out`·exit 124·사용량 unknown으로 종료 확정. (2) `secret_redaction.ps1`: worker·gate·cycle·검증 증거 로그를 쓰기 전 비밀값 마스킹(사용량 수치 유지). 회귀: provider suite +2(실제 host로 60초 hang child를 3초에 종료, 정책 값 검증), safety suite +2(마스킹 패턴·환경 변수 값, gate 로그)
 - 2026-10-21: `install_github_ruleset.ps1`·`audit_github_policy.ps1`에 `-Branch`·`-ProtectionOnly` 추가(삭제·강제 push 금지만; main에는 거부; 같은 이름의 다른 브랜치 ruleset 덮어쓰기 거부). fake gh 회귀 4건 추가(정책 suite 15건). 실제 저장소에 dev ruleset 적용
 - 2026-10-21: 위 변경을 `manager-harness/p0-cleanup-git-policy`에서 커밋(`2e5be71`) → feature gate → integration gate(두 런타임 290/290) → 승격(`promotion_20261021_170902_738_ac3ce25c`) → 승인된 merge로 로컬 `dev` 반영(`60df7c5`). 미병합 원격 브랜치 삭제용 `approve_branch_deletion.ps1` 추가. push 안 함
@@ -75,11 +80,12 @@
 
 ### P0 — 정리 잔여
 
-1. ~~`dev` push와 CI 확인~~ → 2026-10-21 완료(위 3절)
-2. ~~`dev` 서버 보호~~ → 2026-10-21 완료(알려진 문제 9)
-3. `main` PR 흐름 1회 실행(정리 완료 후): `test/<후보>` 생성 → final gate → `request_main_merge_approval.ps1`·`set_main_merge_approval.ps1` → `open_pr_candidate.ps1` → `check_pr_status.ps1` → `merge_pr_if_allowed.ps1`. ruleset이 PR·`Harness CI`를 실제로 강제하는지 확인
-4. workflow의 `actions/checkout`·`actions/upload-artifact`를 Node.js 24 대응 버전으로 갱신
-5. `run_git_hook_smoke.sh`·`run_pr_control_smoke.sh`를 Linux/WSL에서 실행해 새 규칙 확인
+1. `run_git_hook_smoke.sh`·`run_pr_control_smoke.sh`를 Linux/WSL에서 실행해 새 규칙 확인 (이 PC에는 WSL 배포판 없음)
+2. 대상 저장소용 workflow 생성기의 action 버전 점검: `install_release_provenance_workflow.ps1`·`audit_release_provenance.ps1`은 `actions/upload-artifact@v4`(Node 20), `platform_engineering_common.ps1`은 `setup-node@v4`·`setup-java@v4`·`setup-python@v5` 등을 씀. 각 action의 Node 24 버전과 변경 사항을 확인한 뒤 생성기·감사 패턴·테스트를 함께 갱신
+
+### 포트폴리오 준비 (사용자 지시 후 시작)
+
+남은 순서: 3) 작은 대상 저장소에서 Codex 1~2개 작업 점검 실행(유료, 사전 승인) → 4) 작은 Spring Boot/FastAPI 백엔드를 하네스로 만들며 수치 기록 → 5) 실행에서 드러난 문제 개선과 README 1페이지 사례 재작성. 1) 안전장치와 2) `main` 반영은 2026-10-22 완료
 
 ### P1 — 검증 공백 메우기
 
