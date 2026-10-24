@@ -19,7 +19,7 @@
 
 This development checkout has no active target profile.
 Define a valid project profile, validation commands, and committed baseline before live dispatch.
-Read docs/current_state.md for known limitations.
+Read harness/docs/feature_inventory.md (implementation boundaries) for known limitations.
 
 ## Seed Workflow
 
