@@ -65,6 +65,7 @@ Live behavior:
 
 - retries failed worker assignments up to 3 attempts by default
 - continues to the next assignment unless `-StopOnWorkerFailure` is set
+- refuses to start when the worktree that has `dev` checked out (often the main checkout) has uncommitted or untracked changes, because automatic promotion merges there; this check runs before any worker spends tokens
 - promotes each passing assignment into `dev` as soon as it passes (feature gate, integration gate, authorized merge), so the next assignment, which starts from `dev`, sees earlier work; a failed promotion stops the plan
 - removes the merged assignment worktree and local branch after promotion unless `-KeepMergedAssignmentBranches` is set (a dirty worktree or an unmerged branch is kept)
 - prepares a final `test/*` branch and requests `main` approval
