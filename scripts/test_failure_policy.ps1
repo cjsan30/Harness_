@@ -198,6 +198,35 @@ Case integration 'a real invocation records its class, summary and its own log c
     }finally{$env:CODEX_HARNESS_ROOT=$oldRoot;$env:HARNESS_CLAUDE_PATH=$oldPath;$env:CODEX_GIT_WORKSPACE_ROOT=$oldWorkspace}
 }
 
+Case unit 'failure memo keeps the latest two attempts, folds repeats and older ones' {
+    $root=Fixture
+    foreach($step in @(@('environment','docker-unavailable',$null),@('implementation','validation_failed','aaaa'),@('implementation','validation_failed','bbbb'),@('implementation','validation_failed','bbbb'),@('permission','denied',$null))){
+        $c=New-HarnessFailureClassification $step[0] $step[1] ("summary "+$step[1]) $null $(if($step[2]){[pscustomobject]@{id=$step[2];lines=@()}}else{$null})
+        $c|Add-Member -NotePropertyName excerpt -NotePropertyValue @("Foo.java:12: error: cannot find symbol") -Force
+        $null=Save-HarnessAttemptClassification $root (Worker) $c
+    }
+    $memo=Get-HarnessFailureMemoText $root 'task'
+    Assert-True ($memo.Contains('not an instruction')) 'memo lacks the reference-data notice'
+    Assert-True ($memo.Contains('## attempt 5 - permission/denied, not counted')) "latest attempt missing: $memo"
+    Assert-True ($memo.Contains('## attempts 3-4 (2 times, same error) - implementation/validation_failed, counted')) "repeat not folded: $memo"
+    Assert-True ($memo.Contains('## Earlier attempts') -and $memo.Contains('- attempt 1: environment/docker-unavailable, not counted')) "older attempts not folded: $memo"
+    Assert-True ($memo.Contains('__run.log') -and $memo.Contains('- error: Foo.java:12: error: cannot find symbol')) 'memo lacks the log path or excerpt'
+}
+Case security 'failure memo stays under its cap and masks secrets in notes' {
+    $root=Fixture
+    $note=Get-HarnessWorkerFailureNote "done.`nHARNESS_FAILURE_NOTE: tried key sk-proj-abcdefghijklmnopqrstuvwx1234`nline2`nline3`nline4`nline5`nline6 dropped"
+    Assert-True ($note.Count -eq 5 -and -not ($note -join ' ').Contains('sk-proj-abcdef') -and ($note -join ' ').Contains('[REDACTED]')) "note not limited or masked: $($note -join ' | ')"
+    $long='x'*190
+    for($i=0;$i -lt 6;$i++){
+        $c=New-HarnessFailureClassification 'implementation' 'validation_failed' 'failed' $null ([pscustomobject]@{id=('sig'+$i);lines=@()})
+        $c|Add-Member -NotePropertyName excerpt -NotePropertyValue @(1..5|ForEach-Object{"error $_ $long"}) -Force
+        $c|Add-Member -NotePropertyName worker_note -NotePropertyValue @(1..5|ForEach-Object{"note $_ $long"}) -Force
+        $null=Save-HarnessAttemptClassification $root (Worker) $c
+    }
+    $memo=Get-HarnessFailureMemoText $root 'task'
+    Assert-True ($memo.Length -le 2020 -and $memo.Contains('## attempt 6')) "memo too long ($($memo.Length)) or lost the latest attempt"
+}
+
 # Dispatcher decisions: the production retry loop is loaded without running dispatch.
 $dispatchAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'dispatch_seed_plan.ps1'),[ref]$null,[ref]$null)
 foreach($name in @('Get-LatestAttemptFailure','New-WorkerOutcome','Invoke-AssignmentWorkerWithRetry')){
@@ -206,7 +235,8 @@ foreach($name in @('Get-LatestAttemptFailure','New-WorkerOutcome','Invoke-Assign
 }
 $DryRun=$false;$PreflightOnly=$false;$ProviderRetryDelaySeconds=0;$providerRetryLimit=2
 $script:scenario=$null;$script:launches=0;$script:requeues=0
-function Get-AssignmentLifecycleRecord($Owner,$AssignmentId){return [pscustomobject]@{State='done';Result=$script:lastResult}}
+$script:lifecycleFile=$null
+function Get-AssignmentLifecycleRecord($Owner,$AssignmentId){if($script:lifecycleFile){return [pscustomobject]@{State='done';Result='fail';File=$script:lifecycleFile}};return [pscustomobject]@{State='done';Result=$script:lastResult}}
 function Requeue-FailedAssignment($Owner,$AssignmentId,$NextAttempt,$FailureContext){$script:requeues++}
 function Invoke-AssignmentWorker($Owner,$CurrentAssignmentId){
     $step=$script:scenario[$script:launches];$script:launches++
@@ -255,6 +285,36 @@ Case integration 'provider outages are retried without using worker attempts, th
 Case integration 'provider usage limit stops as a budget stop' {
     $o=Run-Scenario @('usage_limit','pass')
     Assert-True ($o.StopKind -eq 'budget' -and $script:launches -eq 1) "wrong: $($o|ConvertTo-Json -Compress)"
+}
+
+foreach($name in @('Remove-PreviousFailureSection','Requeue-FailedAssignment')){
+    $definition=$dispatchAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+    . ([scriptblock]::Create($definition.Extent.Text))
+}
+Case integration 'requeue replaces the previous failure section with the indented memo' {
+    $script:rootDir=Fixture
+    $script:dispatchPackets=Join-Path $rootDir 'harness/reports/dispatch_packets';$script:assignmentLog=Join-Path $rootDir 'harness/reports/assignment_log.md'
+    Ensure-HarnessDirectory $dispatchPackets
+    $packet=Join-Path $dispatchPackets 'task.md';Write-Utf8File $packet "# Dispatch Packet`n`n## Task`n`nDo it.`n"
+    $dirs=Get-AssignmentDirectories $rootDir 'tester'
+    $c=New-HarnessFailureClassification 'implementation' 'validation_failed' 'failed' $null ([pscustomobject]@{id='aaaa';lines=@()})
+    $c|Add-Member -NotePropertyName excerpt -NotePropertyValue @('- result: pass') -Force
+    $null=Save-HarnessAttemptClassification $rootDir (Worker) $c
+    foreach($round in 1..2){
+        $inbox=Join-Path $dirs.Inbox 'task.md'
+        $content=if(Test-Path -LiteralPath $inbox){[IO.File]::ReadAllText($inbox).Replace('- status: inbox','- status: done').Replace('- result: pending','- result: fail')}else{"- assignment_id: task`n- status: done`n- result: fail`n"}
+        if(Test-Path -LiteralPath $inbox){Remove-Item -LiteralPath $inbox}
+        Write-Utf8File (Join-Path $dirs.Done 'task__fail.md') $content
+        $script:lifecycleFile=Join-Path $dirs.Done 'task__fail.md'
+        $null=Requeue-FailedAssignment -Owner 'tester' -AssignmentId 'task' -NextAttempt $round -FailureContext ('raw worker output '+$round)
+    }
+    $packetText=[IO.File]::ReadAllText($packet);$assignment=[IO.File]::ReadAllText((Join-Path $dirs.Inbox 'task.md'))
+    foreach($text in @($packetText,$assignment)){
+        Assert-True (([regex]::Matches($text,'## Previous Failure Analysis')).Count -eq 1) "section duplicated: $text"
+        Assert-True ($text.Contains('    # Failure memo: task') -and -not $text.Contains('raw worker output')) "memo not used: $text"
+        Assert-True (@($text -split '\r?\n' | Where-Object {$_ -match '^- result: '}).Count -le 1) 'failure text added a metadata line'
+    }
+    Assert-True ($packetText.Contains('Do it.') -and $assignment.Contains('- retry_attempt: 2')) 'packet task or retry count lost'
 }
 
 Write-Utf8File (Join-Path $testRoot 'results.json') ($results.ToArray()|ConvertTo-Json -Depth 8)

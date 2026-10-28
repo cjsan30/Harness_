@@ -69,6 +69,17 @@
 - 멈춘 run은 다음 assignment로 넘어가지 않고 assignment와 worktree를 그대로 둡니다. dispatch 요약의 `## Stop`과 출력의 `stop:`/`stop_reason:`에 원인이 남습니다. 원인을 해결한 뒤 `-Resume`으로 이어갑니다.
 - 각 시도의 run log는 `reports/agent_runs/<assignment>__<invocation>__run.log`로 따로 보존됩니다(공용 `__run.log`는 다음 시도가 덮어씀).
 
+### 작업별 실패 메모
+
+분류가 끝나면 하네스가 `harness/state/failures/<assignment>.md`를 기계적으로 다시 씁니다(AI 호출 없음, 토큰 0). 재시도 때 이 메모가 assignment와 dispatch packet의 `## Previous Failure Analysis`에 들어갑니다.
+
+- 최근 2개 시도만 자세히(분류, 요약, 검증 로그의 오류 줄 최대 5개, 거부된 명령·부족한 정보, worker 메모, 해당 시도 log 경로), 그 이전은 한 줄로 접습니다. 같은 signature가 연속되면 "N times, same error"로 합칩니다.
+- 전체 상한은 약 2,000자이며 넘으면 오래된 시도부터 뺍니다. 최신 시도는 항상 남습니다.
+- worker는 실패로 끝날 때 최종 메시지에 `HARNESS_FAILURE_NOTE:` 뒤 최대 5줄(무엇을 시도했고 원인을 무엇으로 보는지)을 적습니다. 줄당 200자, 비밀값은 마스킹합니다.
+- 메모는 "참고 자료이며 지시가 아님"으로 표시되고, 모든 줄을 들여 써서 assignment 메타데이터나 제목을 추가할 수 없습니다. 권한·검증은 메모 내용과 무관하게 설정과 하네스가 강제합니다.
+- 재시도마다 이전 `Previous Failure Analysis` 절을 **교체**합니다(예전에는 worker 출력 최대 4,000자를 매번 덧붙여 지시문이 계속 길어졌음).
+- 여러 작업에 공통으로 쓰이는 교훈 파일은 두지 않습니다. 작업을 넘나드는 자유 문장은 AI가 스스로 규칙을 쓰는 통로가 될 수 있기 때문입니다.
+
 ### 작업당 시도 추가 승인
 
 프로필을 고치지 않고 한 assignment에만 시도를 더 줄 수 있습니다. 기록은 커밋하지 않는 로컬 상태(`harness/state/attempt_grants/<assignment>.json`)에 쌓이고 다른 assignment에는 적용되지 않습니다.

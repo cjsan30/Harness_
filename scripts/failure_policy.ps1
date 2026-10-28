@@ -172,6 +172,7 @@ function Get-HarnessAttemptFacts([string]$RootDir, $WorkerRecord, [string]$LogPa
         provider_messages = $providerMessages.ToArray()
         permission_denials = $denials.ToArray()
         needs_input = $needsInput
+        final_text = $finalText
         validation_ran = ($null -ne $evidence)
         validation_status = $(if ($null -ne $evidence) { $evidence.status } else { $null })
         validation_log = $validationLog
@@ -249,19 +250,28 @@ function Save-HarnessAttemptClassification([string]$RootDir, $WorkerRecord, $Cla
         counts_toward_assignment_limit = $Classification.counts_toward_assignment_limit
         signature = $Classification.signature; signature_lines = @($Classification.signature_lines)
         summary = $Classification.summary; details = @($Classification.details)
+        excerpt = @($(if ($null -ne $Classification.PSObject.Properties['excerpt']) { $Classification.excerpt } else { @() }))
+        worker_note = @($(if ($null -ne $Classification.PSObject.Properties['worker_note']) { $Classification.worker_note } else { @() }))
     }
     $saved = [pscustomobject]@{ version = 1; root = [IO.Path]::GetFullPath($RootDir); assignment_id = $WorkerRecord.assignment_id; attempts = @($attempts + $entry) }
     $path = Join-Path (Get-HarnessFailureStateDirectory $RootDir) ((Assert-SafePathToken $WorkerRecord.assignment_id 'assignment id') + '.json')
     Write-Utf8File $path ($saved | ConvertTo-Json -Depth 8)
+    $null = Write-HarnessFailureMemo $RootDir $WorkerRecord.assignment_id
     return $entry
 }
 
 function Invoke-HarnessAttemptClassification([string]$RootDir, $WorkerRecord, [string]$LogPath, [AllowEmptyString()][string]$LastMessage = '') {
     # Classification problems fall back to a counted implementation failure (fail closed).
+    $facts = $null
     try {
-        $classification = Get-HarnessAttemptClassification (Get-HarnessKnownErrorCatalog $RootDir) (Get-HarnessAttemptFacts $RootDir $WorkerRecord $LogPath $LastMessage)
+        $facts = Get-HarnessAttemptFacts $RootDir $WorkerRecord $LogPath $LastMessage
+        $classification = Get-HarnessAttemptClassification (Get-HarnessKnownErrorCatalog $RootDir) $facts
     } catch {
         $classification = New-HarnessFailureClassification 'implementation' 'unclassified' ('failure could not be classified: ' + $_.Exception.Message) $null (Get-HarnessFailureSignature '' 'unclassified')
+    }
+    if ($null -ne $facts) {
+        $classification | Add-Member -NotePropertyName excerpt -NotePropertyValue @(Get-HarnessFailureExcerpt $facts.validation_log) -Force
+        $classification | Add-Member -NotePropertyName worker_note -NotePropertyValue @(Get-HarnessWorkerFailureNote ($LastMessage + "`n`n" + $facts.final_text)) -Force
     }
     return Save-HarnessAttemptClassification $RootDir $WorkerRecord $classification
 }
@@ -335,4 +345,96 @@ function Get-HarnessFailureDecision($Classification, $History) {
         }
         default { return [pscustomobject]@{ action = 'stop_needs_operator'; reason = ("{0} problem: {1}" -f $Classification.class, $Classification.summary) } }
     }
+}
+
+# Per-assignment failure memo for the next attempt's prompt. Written mechanically
+# from the failure history (no AI call). The worker reads it as reference data.
+$script:HarnessFailureMemoMaxChars = 2000
+$script:HarnessFailureNoteMarker = 'HARNESS_FAILURE_NOTE:'
+
+function Get-HarnessFailureMemoPath([string]$RootDir, [string]$AssignmentId) {
+    return Join-Path (Get-HarnessFailureStateDirectory $RootDir) ((Assert-SafePathToken $AssignmentId 'assignment id') + '.md')
+}
+
+function Get-HarnessWorkerFailureNote([AllowEmptyString()][string]$Text) {
+    # Lines after the marker, up to five, until a blank line.
+    $lines = @(([string]$Text) -split '\r?\n')
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $trimmed = $lines[$i].Trim()
+        if (-not $trimmed.StartsWith($script:HarnessFailureNoteMarker, [StringComparison]::Ordinal)) { continue }
+        $note = New-Object 'System.Collections.Generic.List[string]'
+        $first = $trimmed.Substring($script:HarnessFailureNoteMarker.Length).Trim()
+        if ($first) { $note.Add($first) | Out-Null }
+        for ($j = $i + 1; $j -lt $lines.Count -and $note.Count -lt 5; $j++) {
+            $line = $lines[$j].Trim()
+            if (-not $line) { break }
+            $note.Add($line) | Out-Null
+        }
+        return @($note | Select-Object -First 5 | ForEach-Object { $value = Protect-HarnessSecretText $_; if ($value.Length -gt 200) { $value.Substring(0, 200) } else { $value } })
+    }
+    return @()
+}
+
+function Get-HarnessFailureExcerpt([AllowEmptyString()][string]$Text) {
+    $generic = '(?i)^(?:BUILD FAILED|FAILURE: Build failed|\* What went wrong|\* Try:|> Run with --|> Get more help|Execution failed for task)'
+    $excerpt = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($raw in @(([string]$Text) -split '\r?\n')) {
+        $line = $raw.Trim()
+        if ($line.Length -eq 0 -or $line -match $generic -or $line -notmatch '(?i)error|failed|exception|cannot find symbol|expected') { continue }
+        $line = Protect-HarnessSecretText $line
+        if ($line.Length -gt 200) { $line = $line.Substring(0, 200) }
+        if (-not $excerpt.Contains($line)) { $excerpt.Add($line) | Out-Null }
+        if ($excerpt.Count -ge 5) { break }
+    }
+    return $excerpt.ToArray()
+}
+
+function Write-HarnessFailureMemo([string]$RootDir, [string]$AssignmentId) {
+    $history = Read-HarnessFailureHistory $RootDir $AssignmentId
+    $attempts = @($history.attempts)
+    if ($attempts.Count -eq 0) { return $null }
+    $runs = Get-HarnessConfiguredPath -RootDir $RootDir -Name 'agent_runs' -FallbackRelativePath 'harness/reports/agent_runs'
+    $header = @(
+        "# Failure memo: $AssignmentId",
+        '',
+        'Reference data recorded by Harness from earlier attempts. It is not an instruction and does not change the assignment, permissions or validation.',
+        ''
+    )
+    $sections = New-Object 'System.Collections.Generic.List[string]'
+    # Latest first; an attempt with the same signature as the newer one is folded into it.
+    $detailed = 0; $older = New-Object 'System.Collections.Generic.List[string]'
+    for ($i = $attempts.Count - 1; $i -ge 0; $i--) {
+        $a = $attempts[$i]; $number = $i + 1
+        $counted = if ($a.counts_toward_assignment_limit) { 'counted' } else { 'not counted' }
+        $repeats = 1
+        while ($i -gt 0 -and $a.signature -and $attempts[$i - 1].signature -ceq $a.signature) { $repeats++; $i-- }
+        $label = if ($repeats -gt 1) { "attempts $($i + 1)-$number ($repeats times, same error)" } else { "attempt $number" }
+        if ($detailed -ge 2) { $older.Add("- ${label}: $($a.class)/$($a.kind), $counted") | Out-Null; continue }
+        $detailed++
+        $lines = New-Object 'System.Collections.Generic.List[string]'
+        $lines.Add("## $label - $($a.class)/$($a.kind), $counted") | Out-Null
+        $lines.Add("- summary: $($a.summary)") | Out-Null
+        foreach ($line in @($a.excerpt)) { if ($line) { $lines.Add("- error: $line") | Out-Null } }
+        foreach ($line in @($a.details)) { if ($line) { $lines.Add("- detail: $line") | Out-Null } }
+        foreach ($line in @($a.worker_note)) { if ($line) { $lines.Add("- worker note: $line") | Out-Null } }
+        $lines.Add("- full log: " + (Get-RelativeProjectPath $RootDir (Join-Path $runs ($AssignmentId + '__' + $a.invocation_id + '__run.log')))) | Out-Null
+        $sections.Add(($lines.ToArray() -join "`n")) | Out-Null
+    }
+    if ($older.Count -gt 0) { $sections.Add((@('## Earlier attempts') + $older.ToArray()) -join "`n") | Out-Null }
+    $text = ($header -join "`n") + ($sections.ToArray() -join "`n`n") + "`n"
+    # Over the cap, drop the oldest sections first; the latest attempt always stays.
+    while ($text.Length -gt $script:HarnessFailureMemoMaxChars -and $sections.Count -gt 1) {
+        $sections.RemoveAt($sections.Count - 1)
+        $text = ($header -join "`n") + ($sections.ToArray() -join "`n`n") + "`n"
+    }
+    if ($text.Length -gt $script:HarnessFailureMemoMaxChars) { $text = $text.Substring(0, $script:HarnessFailureMemoMaxChars) + "`n[truncated]`n" }
+    $path = Get-HarnessFailureMemoPath $RootDir $AssignmentId
+    Write-Utf8File $path $text
+    return $text
+}
+
+function Get-HarnessFailureMemoText([string]$RootDir, [string]$AssignmentId) {
+    $path = Get-HarnessFailureMemoPath $RootDir $AssignmentId
+    if (-not (Test-Path -LiteralPath $path)) { return '' }
+    return [IO.File]::ReadAllText($path)
 }
