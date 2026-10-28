@@ -286,4 +286,6 @@ worker exit requirements and snapshot scope. In a standalone target omit `harnes
   - `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id> -Grant 1 -Reason "<text>"`
 - Environment requirements and operator-declared repairs live in the profile `environment` section; decide them before a paid run:
   - `pwsh -NoProfile -File harness/scripts/harness.ps1 env [-Repair] [-Json]`
+- Run-stop and budget notifications (Telegram, Discord webhook). Secrets stay in environment variables; settings are local state:
+  - `pwsh -NoProfile -File harness/scripts/harness.ps1 notify [-Telegram on|off] [-Discord on|off] [-OnStop|-OnBudget|-OnCompletion on|off] [-QuietHours on|off -QuietStart HH:mm -QuietEnd HH:mm] [-ReminderMinutes n -ReminderCount n -WaitHours n] [-Test] [-Json]`
 

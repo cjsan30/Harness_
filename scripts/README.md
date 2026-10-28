@@ -337,6 +337,7 @@ Artifacts are kept under `.test-output/`. See `../docs/improvement_backlog.md` f
 - `failure_policy.ps1`: 실패 시도 분류(`configs/known_errors.json`), 구현 실패만 세는 작업당 시도, 추가 승인 기록.
 - `manage_assignment_attempts.ps1 -AssignmentId <id> [-Grant n -Reason text] [-Json]`: 작업별 시도 현황·추가 승인. CLI `attempts`.
 - `environment_repair.ps1`, `check_environment_readiness.ps1 [-Repair] [-Json]`: 프로필에 선언된 환경 요구사항 확인과 복구. CLI `env`.
+- `notification_channels.ps1`, `manage_notifications.ps1`: 멈춤·비용 한도 알림(Telegram, Discord webhook)과 로컬 설정. CLI `notify`.
 - `harness_layout.ps1`, `hook_bootstrap.sh`: 독립/이식 경로와 worktree hook 정책 루트 처리.
 - `test_execution_usage.ps1`, `test_harness_layout.ps1`: 네트워크/유료 AI 없는 회귀. `test_harness.ps1`에 포함.
 - 개별 검증·cycle·retry shell은 `invoke_harness.sh` → `run_harness_shell.ps1`로 위임. `validation_command.ps1`이 cycle과 동일한 프로필 명령을 해석·실행합니다. [Shell 계약과 전환](../docs/shell_commands.md) 참고.

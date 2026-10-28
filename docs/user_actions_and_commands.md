@@ -466,3 +466,23 @@ Linux/macOS shell wrappers and Git hooks automatically put PowerShell runtime ca
 - 선언된 복구까지 실행: `... env -Repair`
 - `needs_decision`이 나오면 설치 방법을 정하거나 직접 설치한 뒤 다시 확인합니다. live seed 실행은 준비되지 않은 환경에서 worker를 띄우지 않습니다.
 
+# 실행 멈춤·비용 한도 알림 (2026-10-28)
+
+seed 실행이 멈추거나(`needs_operator`, `repeated_failure`) 비용 한도에 닿으면(`budget`) Telegram과 Discord로 알림을 한 번 보냅니다. 알림 실패는 실행 결과를 바꾸지 않습니다.
+
+- **비밀값**은 환경 변수로만 둡니다: `HARNESS_TELEGRAM_BOT_TOKEN`, `HARNESS_TELEGRAM_CHAT_ID`, `HARNESS_DISCORD_WEBHOOK_URL`. 설정 파일·로그·출력에 쓰지 않으며 메시지 안의 비밀값도 마스킹합니다.
+- **설정**(GUI에서 바꿀 값)은 커밋하지 않는 `harness/state/notifications/settings.json`에 둡니다.
+
+| 설정 | 기본값 | 명령 옵션 |
+| --- | --- | --- |
+| 채널 사용 | Telegram·Discord 모두 켬(비밀값이 있을 때만 실제 발송) | `-Telegram on/off`, `-Discord on/off` |
+| 알림 종류 | 멈춤 켬, 비용 한도 켬, 계획 완료 끔 | `-OnStop`, `-OnBudget`, `-OnCompletion` |
+| 방해 금지 시간 | 끔, 23:00-08:00 | `-QuietHours on/off`, `-QuietStart`, `-QuietEnd` (HH:mm) |
+| 대기 중 재알림 | 120분 간격, 최대 5회, 대기 상한 12시간 | `-ReminderMinutes`(10~1440), `-ReminderCount`(0~50), `-WaitHours`(1~72) |
+
+- 조회·변경: `pwsh -NoProfile -File harness/scripts/harness.ps1 notify [옵션]`
+- 실제 테스트 발송: `... notify -Test` (설정된 채널로 메시지 1건을 실제로 보냄)
+- 방해 금지 시간에는 지금은 **소리 없이** 전달합니다(Telegram `disable_notification`, Discord 무음 플래그). 재알림 간격·횟수·대기 상한은 저장만 되며, 대기하며 재알림을 보내는 기능은 다음 단계(Telegram 원격 조작)에서 사용합니다.
+- 전체 끄기: `HARNESS_NOTIFY_DISABLED=true`.
+
+

@@ -1476,6 +1476,18 @@ $($resultLines -join [Environment]::NewLine)
 "@
     Write-Utf8File -Path $summaryFile -Content $summary
     Release-HarnessLock -LockPath $dispatchLock
+    if ($InvokeCodex -and -not $DryRun -and -not $PreflightOnly -and ($stopKind -ne "none" -or $overallStatus -eq "pass")) {
+        # A notification problem is reported but never changes the run result.
+        try {
+            $projectName = (Get-ProjectProfile -RootDir $rootDir).project.name
+            $notifyEvent = if ($stopKind -eq "budget") { "budget" } elseif ($stopKind -ne "none") { "stop" } else { "completion" }
+            $kind = if ($stopKind -ne "none") { $stopKind } else { "completion" }
+            $text = Format-HarnessStopNotification $projectName $kind $(if ($stopAssignmentId) { $stopAssignmentId } else { "none" }) $stopReason $relativePlanPath
+            foreach ($sent in @(Send-HarnessNotification $rootDir $notifyEvent $text)) { Write-Output ("notification: {0} {1}" -f $sent.channel, $sent.status) }
+        } catch {
+            Write-Output ("warning: notification failed: " + (Protect-HarnessNotificationText $_.Exception.Message))
+        }
+    }
 }
 
 Write-Output "plan: $planPath"

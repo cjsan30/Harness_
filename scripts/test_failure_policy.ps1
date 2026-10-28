@@ -1,4 +1,4 @@
-param([string]$OutputDirectory='')
+﻿param([string]$OutputDirectory='')
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'harness_common.ps1')
 $source=Split-Path -Parent $PSScriptRoot
