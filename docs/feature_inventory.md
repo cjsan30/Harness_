@@ -283,6 +283,9 @@ JSON 프로필과 Markdown 상태, UTF-8 쓰기, 경로 제한, 프로세스 실
 | [test_execution_usage.ps1](../scripts/test_execution_usage.ps1) | 미확인 사용량, 손상 기록, 한도·경쟁 예약 및 조회 명령 회귀 |
 | [failure_policy.ps1](../scripts/failure_policy.ps1) | 실패한 시도를 구현·환경·권한·provider·정보 부족으로 분류, 구현 실패만 작업당 시도로 계산, 추가 승인 기록, 같은 오류 반복 판단, 재시도용 작업별 실패 메모 작성 |
 | [known_errors.json](../configs/known_errors.json) | 분류용 고정 오류 문구 목록(엔진 기본). 프로젝트는 `project/configs/known_errors.json`으로 추가·대체 |
+| [environment_repair.ps1](../scripts/environment_repair.ps1) | 프로필 `environment` 절 검증, 요구사항 확인, 사용자가 선언한 복구(start/run + check)만 실행 |
+| [check_environment_readiness.ps1](../scripts/check_environment_readiness.ps1) | `harness.ps1 env`: 기획 단계·유료 실행 전 환경 확인, `-Repair`로 선언된 복구 실행 |
+| [test_environment_repair.ps1](../scripts/test_environment_repair.ps1) | 설정 검증, 복구 성공·실패·시간 제한, 준비 상태 구분, dispatcher 복구 후 재실행·상한 회귀 |
 | [manage_assignment_attempts.ps1](../scripts/manage_assignment_attempts.ps1) | `harness.ps1 attempts`: 작업별 시도 현황 조회와 추가 승인 |
 | [test_failure_policy.ps1](../scripts/test_failure_policy.ps1) | 분류, signature, 시도 계산·승인, 손상 기록 거부, dispatcher 멈춤·재시도 결정 회귀 |
 

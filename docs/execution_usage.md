@@ -69,6 +69,34 @@
 - 멈춘 run은 다음 assignment로 넘어가지 않고 assignment와 worktree를 그대로 둡니다. dispatch 요약의 `## Stop`과 출력의 `stop:`/`stop_reason:`에 원인이 남습니다. 원인을 해결한 뒤 `-Resume`으로 이어갑니다.
 - 각 시도의 run log는 `reports/agent_runs/<assignment>__<invocation>__run.log`로 따로 보존됩니다(공용 `__run.log`는 다음 시도가 덮어씀).
 
+### 환경 요구사항과 사전 선언된 복구
+
+필요한 도구와 복구 방법은 **기획 단계에서 사용자가 정해** 활성 프로필의 `environment` 절에 적습니다. 하네스는 여기 적힌 명령 배열만 실행합니다. worker(AI)는 설치하거나 서비스를 시작하지 않습니다.
+
+```json
+"environment": {
+  "version": 1,
+  "requirements": [
+    { "id": "jdk", "description": "JDK 21", "check": ["java", "-version"] },
+    { "id": "docker", "description": "Docker for Testcontainers", "check": ["docker", "info"], "repair": "docker-start" }
+  ],
+  "repairs": {
+    "docker-start": {
+      "description": "Docker Desktop 시작",
+      "start": ["C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe"],
+      "check": ["docker", "info"],
+      "wait_seconds": 180
+    }
+  }
+}
+```
+
+- 명령은 셸 문자열이 아니라 **JSON 배열**(실행 파일 + 인자)입니다. `start`는 기다리지 않고 띄우고, `run`은 끝날 때까지 기다립니다(설치 등). 둘 다 그 뒤 `check`가 성공할 때까지 `wait_seconds`(1~1800)만큼 확인합니다.
+- `harness.ps1 env`: 선언된 요구사항을 확인합니다. 상태는 `ready` / `blocked` / `undeclared`(요구사항 없음)입니다. 요구사항별로는 `ok`, `repairable`(복구 선언됨), `needs_decision`(복구 미정: 설치 방법을 정하거나 직접 설치)입니다. `-Repair`를 붙이면 선언된 복구를 실행합니다.
+- 오류 목록이 가리키는 복구(예: `docker-start`)가 프로필에 없으면 그 실패는 복구 대신 멈춤이 된다고 미리 알려줍니다.
+- **유료 실행 직전 검사:** live seed 실행은 worker를 띄우기 전에 요구사항을 확인하고 선언된 복구를 실행합니다. 그래도 준비되지 않으면 토큰을 쓰기 전에 멈춥니다(`needs_operator`). 요구사항이 없으면 경고만 출력합니다.
+- **실행 중 환경 실패:** 분류된 환경 오류에 선언된 복구가 있으면 하네스가 복구 후 같은 작업을 다시 실행합니다. 이 재실행은 작업당 시도와 run의 worker 시도를 쓰지 않습니다. 한 run에서 작업당 최대 2회까지 복구하며, 복구가 실패하거나 계속 같은 문제가 나면 멈춥니다. 재실행도 실제 실행이므로 전체 실행·토큰·시간 한도에는 들어갑니다.
+
 ### 작업별 실패 메모
 
 분류가 끝나면 하네스가 `harness/state/failures/<assignment>.md`를 기계적으로 다시 씁니다(AI 호출 없음, 토큰 0). 재시도 때 이 메모가 assignment와 dispatch packet의 `## Previous Failure Analysis`에 들어갑니다.

@@ -38,6 +38,8 @@ if ($ProviderRetryDelaySeconds -lt 0) {
     throw "ProviderRetryDelaySeconds must not be negative"
 }
 $providerRetryLimit = 2
+# Declared environment repairs per assignment in one run before the plan stops.
+$environmentRepairLimit = 2
 if ($StaleAfterSeconds -lt 1) {
     throw "StaleAfterSeconds must be at least 1"
 }
@@ -850,6 +852,7 @@ function Invoke-AssignmentWorkerWithRetry {
 
     $attempt = 0
     $providerRetries = 0
+    $environmentRepairs = 0
     $lastError = ""
     $lastClass = "none"
     while ($attempt -lt $MaxWorkerAttempts) {
@@ -879,6 +882,20 @@ function Invoke-AssignmentWorkerWithRetry {
             $decision = Get-HarnessFailureDecision $failure.Entry $failure.History
         }
 
+        if ($decision.action -eq "repair") {
+            if ($environmentRepairs -ge $environmentRepairLimit) {
+                return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -StopKind "needs_operator" -StopReason ("environment problem remained after $environmentRepairs repair(s): " + $decision.reason) -FailureClass $lastClass
+            }
+            $environmentRepairs += 1
+            $repair = Invoke-HarnessEnvironmentRepair $rootDir $decision.repair
+            if (-not $repair.Success) {
+                return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -StopKind "needs_operator" -StopReason ("environment problem and repair failed: " + $repair.Message) -FailureClass $lastClass
+            }
+            # The environment, not the work, failed: the retry does not use a worker attempt.
+            $attempt -= 1
+            Requeue-FailedAssignment -Owner $Owner -AssignmentId $AssignmentId -NextAttempt ($attempt + 1) -FailureContext $lastError | Out-Null
+            continue
+        }
         if ($decision.action -eq "provider_retry") {
             if ($providerRetries -ge $providerRetryLimit) {
                 return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -StopKind "needs_operator" -StopReason ("provider kept failing after $providerRetries retries: " + $decision.reason) -FailureClass $lastClass
@@ -961,6 +978,19 @@ $relativePlanPath = Get-RelativeProjectPath -RootDir $rootDir -AbsolutePath $pla
 $invokeMode = if ($PreflightOnly) { "preflight" } elseif ($DryRun) { "dry_run" } elseif ($InvokeCodex) { "live" } else { "create_only" }
 
 try {
+    if ($InvokeCodex -and -not $DryRun -and -not $PreflightOnly) {
+        # Check declared tools before any worker spends tokens; declared repairs run here.
+        $readiness = Get-HarnessEnvironmentReadiness $rootDir -Repair
+        foreach ($item in @($readiness.requirements | Where-Object { $_.state -eq 'repaired' })) { Write-Output "environment repaired: $($item.id): $($item.message)" }
+        if ($readiness.status -eq "undeclared") {
+            Write-Output "warning: the profile declares no environment requirements; tool problems will stop the run instead of being repaired"
+        }
+        if ($readiness.status -eq "blocked") {
+            $stopKind = "needs_operator"
+            $stopReason = "environment not ready before any worker launch: " + ((@($readiness.requirements | Where-Object { $_.state -notin @('ok','repaired') }) | ForEach-Object { "$($_.id) ($($_.state)): $($_.message)" }) -join "; ")
+            throw $stopReason
+        }
+    }
     foreach ($block in $assignmentBlocks) {
         $definition = Get-SeedAssignmentDefinition -Block $block
         if ([string]::IsNullOrWhiteSpace($definition.Owner)) {

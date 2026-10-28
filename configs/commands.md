@@ -284,4 +284,6 @@ worker exit requirements and snapshot scope. In a standalone target omit `harnes
 - `max_attempts_per_assignment` counts only attempts classified as implementation failures (2026-10-28). Show or extend one assignment's attempts:
   - `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id> [-Json]`
   - `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id> -Grant 1 -Reason "<text>"`
+- Environment requirements and operator-declared repairs live in the profile `environment` section; decide them before a paid run:
+  - `pwsh -NoProfile -File harness/scripts/harness.ps1 env [-Repair] [-Json]`
 

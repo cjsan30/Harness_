@@ -343,6 +343,11 @@ function Get-HarnessFailureDecision($Classification, $History) {
             if ($Classification.kind -ceq 'usage_limit') { return [pscustomobject]@{ action = 'stop_budget'; reason = 'provider usage limit reached: ' + $Classification.summary } }
             return [pscustomobject]@{ action = 'stop_needs_operator'; reason = 'provider problem: ' + $Classification.summary }
         }
+        'environment' {
+            # Only a repair the operator declared in the profile is run; otherwise stop.
+            if (-not [string]::IsNullOrWhiteSpace($Classification.repair)) { return [pscustomobject]@{ action = 'repair'; reason = $Classification.summary; repair = $Classification.repair } }
+            return [pscustomobject]@{ action = 'stop_needs_operator'; reason = 'environment problem: ' + $Classification.summary }
+        }
         default { return [pscustomobject]@{ action = 'stop_needs_operator'; reason = ("{0} problem: {1}" -f $Classification.class, $Classification.summary) } }
     }
 }

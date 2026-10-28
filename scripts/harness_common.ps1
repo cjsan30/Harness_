@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'execution_usage.ps1')
 . (Join-Path $PSScriptRoot 'assignment_evidence.ps1')
 . (Join-Path $PSScriptRoot 'failure_policy.ps1')
+. (Join-Path $PSScriptRoot 'environment_repair.ps1')
 $script:HarnessProjectProfileCache = @{}
 $script:HarnessUtf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:HarnessScratchDirectory = $null

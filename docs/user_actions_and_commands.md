@@ -458,3 +458,11 @@ Linux/macOS shell wrappers and Git hooks automatically put PowerShell runtime ca
 
 자세한 분류 기준은 [실행 사용량 문서](execution_usage.md)의 "실패 분류와 작업당 시도"를 보세요.
 
+# 기획 단계 환경 확인과 자동 복구 (2026-10-28)
+
+구현(유료 실행) 전에 필요한 도구와 복구 방법을 정해 프로필 `environment` 절에 적습니다. 형식은 [실행 사용량 문서](execution_usage.md)의 "환경 요구사항과 사전 선언된 복구"를 보세요.
+
+- 확인: `pwsh -NoProfile -File harness/scripts/harness.ps1 env [-Json]`
+- 선언된 복구까지 실행: `... env -Repair`
+- `needs_decision`이 나오면 설치 방법을 정하거나 직접 설치한 뒤 다시 확인합니다. live seed 실행은 준비되지 않은 환경에서 worker를 띄우지 않습니다.
+
