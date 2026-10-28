@@ -6,6 +6,7 @@ function Get-HarnessCliRequest([object[]]$Tokens) {
     $schemas=@{
         help=@();init=@('ProjectName','Requirements','RequirementsFile','Language','Runtime','Framework','Ide','ApplicationType','Force','ListPresets')
         doctor=@();status=@();usage=@();test=@('SyntaxOnly')
+        attempts=@('AssignmentId','Grant','Reason')
         dashboard=@('Port','RefreshSeconds','PythonExecutable','NoOpen','Snapshot')
         run=@('PlanFile','Model','MaxWorkerAttempts','StaleAfterSeconds','DryRun','PreflightOnly','Ephemeral','StopOnWorkerFailure','SkipAutoAdvanceGit')
         resume=@('PlanFile','StaleAfterSeconds','Execute','Model','MaxWorkerAttempts','DryRun','PreflightOnly','Ephemeral','StopOnWorkerFailure','SkipAutoAdvanceGit')
@@ -30,6 +31,15 @@ function Get-HarnessCliRequest([object[]]$Tokens) {
             if(-not [int]::TryParse($options[$key],[ref]$value) -or $value -lt 1){throw "option must be a positive integer: $key"}
             $options[$key]=$value
         }
+    }
+    if($command -eq 'attempts'){
+        if(-not $options.ContainsKey('AssignmentId')){throw 'attempts requires -AssignmentId'}
+        if($options.ContainsKey('Grant')){
+            $value=0
+            if(-not [int]::TryParse($options.Grant,[ref]$value) -or $value -lt 1 -or $value -gt 10){throw 'option must be an integer from 1 to 10: Grant'}
+            $options.Grant=$value
+            if(-not $options.ContainsKey('Reason')){throw 'attempts -Grant requires -Reason'}
+        }elseif($options.ContainsKey('Reason')){throw '-Reason is only used with -Grant'}
     }
     if($command -in @('run','resume') -and -not $options.ContainsKey('PlanFile')){throw 'run/resume requires -PlanFile; implicit latest-plan selection is not supported'}
     if($options.DryRun -and $options.PreflightOnly){throw 'choose either -DryRun or -PreflightOnly'}
@@ -57,7 +67,7 @@ function Get-HarnessCliPlan($Request,[string]$ScriptDirectory) {
     $root=if($options.ContainsKey('Root')){[IO.Path]::GetFullPath($options.Root)}else{Get-HarnessRoot $ScriptDirectory}
     if(-not (Test-Path -LiteralPath $root -PathType Container)){throw 'target root does not exist'}
     $engine=Get-HarnessEngineRoot $root
-    $scripts=@{init='init_project_adapter.ps1';doctor='run_harness_preflight.ps1';run='run_seed_handoff.ps1';resume='get_seed_handoff_resume.ps1';status='get_harness_status.ps1';usage='get_execution_usage.ps1';test='test_harness.ps1';dashboard='start_harness_dashboard.ps1'}
+    $scripts=@{init='init_project_adapter.ps1';doctor='run_harness_preflight.ps1';run='run_seed_handoff.ps1';resume='get_seed_handoff_resume.ps1';status='get_harness_status.ps1';usage='get_execution_usage.ps1';attempts='manage_assignment_attempts.ps1';test='test_harness.ps1';dashboard='start_harness_dashboard.ps1'}
     $name=$scripts[$Request.Command]
     if($Request.Command -eq 'resume' -and $options.Execute){$name='run_seed_handoff.ps1'}
     if($Request.Command -eq 'dashboard' -and $options.Snapshot){$name='get_harness_dashboard.ps1'}
@@ -73,7 +83,7 @@ function Get-HarnessCliPlan($Request,[string]$ScriptDirectory) {
         }
     }
     if($Request.Command -eq 'resume' -and $options.Execute){$parameters.Resume=$true}
-    $structured=($Request.Command -in @('status','usage') -or ($Request.Command -eq 'resume' -and -not $options.Execute))
+    $structured=($Request.Command -in @('status','usage','attempts') -or ($Request.Command -eq 'resume' -and -not $options.Execute))
     if($options.Json -and $structured){$parameters.Json=$true}
     if($Request.Command -eq 'dashboard' -and $options.Snapshot){$structured=$true}
     return [pscustomobject]@{Root=$root;Script=$path;Parameters=$parameters;Structured=($options.Json -and $structured)}
@@ -117,6 +127,8 @@ Nested layout: use harness/scripts/harness.ps1 from the target repository.
   resume   Report seed recovery state: -PlanFile <file>; -Execute runs recovery
   status   Refresh project status (query success does not mean project success)
   usage    Read recorded execution usage
+  attempts Show an assignment's counted attempts: -AssignmentId <id>
+           -Grant 1..10 -Reason <text> records extra attempts for that assignment
   dashboard Start a local read-only web monitor; Ctrl+C stops the server
            -Port 0..65535 -RefreshSeconds 5..300 -PythonExecutable <path> -NoOpen
            -Snapshot [-Json] reads once without Python, a server or writes

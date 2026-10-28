@@ -281,6 +281,10 @@ JSON 프로필과 Markdown 상태, UTF-8 쓰기, 경로 제한, 프로세스 실
 | [secret_redaction.ps1](../scripts/secret_redaction.ps1) | worker·gate·cycle·검증 증거 로그를 쓰기 전 비밀값을 `[REDACTED]`로 마스킹. 사용량 수치는 유지 |
 | [get_execution_usage.ps1](../scripts/get_execution_usage.ps1) | 보존된 전체 실행의 합계와 실행별 JSON 조회 |
 | [test_execution_usage.ps1](../scripts/test_execution_usage.ps1) | 미확인 사용량, 손상 기록, 한도·경쟁 예약 및 조회 명령 회귀 |
+| [failure_policy.ps1](../scripts/failure_policy.ps1) | 실패한 시도를 구현·환경·권한·provider·정보 부족으로 분류, 구현 실패만 작업당 시도로 계산, 추가 승인 기록, 같은 오류 반복 판단 |
+| [known_errors.json](../configs/known_errors.json) | 분류용 고정 오류 문구 목록(엔진 기본). 프로젝트는 `project/configs/known_errors.json`으로 추가·대체 |
+| [manage_assignment_attempts.ps1](../scripts/manage_assignment_attempts.ps1) | `harness.ps1 attempts`: 작업별 시도 현황 조회와 추가 승인 |
+| [test_failure_policy.ps1](../scripts/test_failure_policy.ps1) | 분류, signature, 시도 계산·승인, 손상 기록 거부, dispatcher 멈춤·재시도 결정 회귀 |
 
 실제 모델·청구액·구독 잔여량을 추정하지 않습니다. [정책과 한계](execution_usage.md), [배치 지원](layout_support.md)을 참고하세요.
 

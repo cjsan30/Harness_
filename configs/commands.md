@@ -281,4 +281,7 @@ worker exit requirements and snapshot scope. In a standalone target omit `harnes
 - Standalone: `pwsh -NoProfile -File scripts/get_execution_usage.ps1 [-Json]`
 - Installed: `pwsh -NoProfile -File harness/scripts/get_execution_usage.ps1 [-Json]`
 - Optional `execution_policy` in the active profile controls launch count, assignment attempts, concurrency and subsequent-launch token/time thresholds. See `docs/execution_usage.md`; no provider quota or monetary amount is inferred.
+- `max_attempts_per_assignment` counts only attempts classified as implementation failures (2026-10-28). Show or extend one assignment's attempts:
+  - `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id> [-Json]`
+  - `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id> -Grant 1 -Reason "<text>"`
 

@@ -40,7 +40,7 @@
 | --- | --- |
 | billing_mode | unknown / subscription / api 중 운영자가 선언한 구분 |
 | max_invocations | 보존된 모든 예약을 포함하는 프로젝트 전체 실행 횟수 상한 |
-| max_attempts_per_assignment | 같은 owner/assignment의 누적 실행 시도 상한. seed의 기존 반복 제한에도 추가 적용 |
+| max_attempts_per_assignment | 한 assignment(seed plan의 작업 하나, 같은 ID)에서 **구현 실패로 분류된** 누적 시도 상한. 실행(run)이나 `-Resume`이 바뀌어도 초기화되지 않습니다. 아래 "실패 분류" 참고 |
 | max_concurrent_workers | 완료되지 않은 예약 개수 상한. 죽었는지 확인되지 않은 예약도 점유 |
 | max_total_tokens | 확인된 누적 입력+출력 토큰이 한도 이상이면 다음 실행 거부 |
 | max_total_duration_seconds | 완료된 프로세스 실행 시간 합이 한도 이상이면 다음 실행 거부 |
@@ -49,6 +49,37 @@
 한도는 `null` 또는 음이 아닌 정수입니다. `0`은 실행 금지입니다(`max_invocation_seconds`만 예외로 1 이상). 알 수 없는 필드·잘못된 타입은 preflight와 실행에서 거부합니다. 프로필 캐시에 가려지지 않도록 예약 시 최신 파일을 읽습니다.
 
 누적 토큰·시간은 **다음 실행의 시작을 제한**합니다. 한 번의 실행이 남은 누적 한도를 넘을 수 있으므로, 실행 1회의 상한은 `max_invocation_seconds`로 둡니다. 이 값은 예약할 때 worker intent(`timeout_seconds`)에 묶여 실행 중 프로필이 바뀌어도 달라지지 않습니다. worker host는 별도 watchdog(`worker_timeout_watchdog.ps1`)을 띄우고, 시간이 지나면 watchdog이 timeout을 먼저 기록한 뒤 host의 하위 프로세스(provider 트리)만 종료합니다. host는 살아남아 종료를 확정 기록합니다(`timed_out: true`, `exit_code: 124`, provider 결과 failed/`process_exit`, 사용량 unknown). watchdog은 host PID의 시작 시각이 기록과 같을 때만 동작하므로 재사용된 PID는 건드리지 않습니다. 토큰 제한을 켠 상태에서 하나라도 사용량이 unknown/reserved면 새 실행을 차단합니다. 시간 제한은 reserved가 남으면 차단합니다. 따라서 이 두 제한을 사용하면 사용량이 확정되기 전에는 동시에 다음 worker를 시작하지 않습니다.
+
+## 실패 분류와 작업당 시도 (2026-10-28)
+
+실패한 시도는 끝난 직후 분류되어 `harness/state/failures/<assignment>.json`에 남습니다. 분류는 `configs/known_errors.json`(엔진 기본)과 선택적 `harness/project/configs/known_errors.json`(프로젝트 추가·같은 id면 대체)의 고정 문구, provider 결과, timeout 기록, 검증 증거 로그로 정합니다. 이 목록은 하네스 판단에만 쓰이며 worker 지시문에 들어가지 않습니다.
+
+| 분류 | 판별 근거 | dispatcher 처리 | 작업당 시도에 포함 |
+| --- | --- | --- | --- |
+| implementation | 검증이 돌았는데 실패, 검증 없이 종료, 작업 중 timeout, turn 소진 | 재시도. 직전 구현 실패와 signature가 같으면 즉시 멈춤(`repeated_failure`) | 예 |
+| environment | 목록의 환경 문구(Docker, 도구 없음, JDK, 포트, 네트워크), 출력 없이 5분 이상 멈춘 뒤 timeout | 멈춤(`needs_operator`) | 아니오 |
+| permission | provider가 거부한 도구 사용(`permission_denials`) | 멈춤. 거부된 명령을 기록 | 아니오 |
+| provider | provider 오류 결과의 문구: 사용량 한도, 인증, rate limit, 과부하 | rate limit·과부하는 대기 후 최대 2회 재시도(run의 시도를 쓰지 않음). 사용량 한도는 `budget` 멈춤. 인증·기타는 멈춤 | 아니오 |
+| needs_input | worker 최종 메시지의 `HARNESS_NEEDS_INPUT: <무엇이 없는지>` | 멈춤 | 아니오 |
+
+- 분류 근거는 provider의 **오류 결과**만 봅니다. worker가 읽은 파일이나 도구 출력 속 문구는 provider 오류로 보지 않습니다.
+- 분류에 실패하면 구현 실패(`unclassified`)로 세어 보수적으로 닫습니다. 분류 기록이 없는 실행(진행 중·비정상 종료·이전 버전 엔진 기록)도 구현 시도로 셉니다.
+- signature는 검증 로그의 구체적인 오류 줄에서 경로·숫자를 지우고 만든 해시입니다. 같은 오류가 다른 줄 번호로 반복돼도 같게 나옵니다.
+- **비용은 계속 지킵니다.** 분류와 관계없이 실행된 모든 시도는 `max_invocations`, 토큰, 시간 합계에 들어갑니다. 분류는 사용량 기록을 지우거나 되돌리지 않습니다.
+- 멈춘 run은 다음 assignment로 넘어가지 않고 assignment와 worktree를 그대로 둡니다. dispatch 요약의 `## Stop`과 출력의 `stop:`/`stop_reason:`에 원인이 남습니다. 원인을 해결한 뒤 `-Resume`으로 이어갑니다.
+- 각 시도의 run log는 `reports/agent_runs/<assignment>__<invocation>__run.log`로 따로 보존됩니다(공용 `__run.log`는 다음 시도가 덮어씀).
+
+### 작업당 시도 추가 승인
+
+프로필을 고치지 않고 한 assignment에만 시도를 더 줄 수 있습니다. 기록은 커밋하지 않는 로컬 상태(`harness/state/attempt_grants/<assignment>.json`)에 쌓이고 다른 assignment에는 적용되지 않습니다.
+
+```powershell
+pwsh -NoProfile -File scripts/harness.ps1 attempts -AssignmentId <id>
+pwsh -NoProfile -File scripts/harness.ps1 attempts -AssignmentId <id> -Grant 1 -Reason "원인을 확인하고 요구사항을 보완함"
+```
+
+- `-Grant`는 1~10, `-Reason`은 필수입니다. 한 번도 실행되지 않은 assignment에는 승인할 수 없습니다(오타 방지).
+- 한도 메시지는 어떤 한도에 몇 회/얼마를 썼는지 보여줍니다. 예: `execution budget reached: max_invocations (12 of 12 invocations used)`. dispatcher는 이 거부를 worker 실패로 처리하지 않고 `budget` 멈춤으로 보고합니다.
 
 ## 조회와 복구
 

@@ -6,6 +6,8 @@ param(
     [switch]$PreflightOnly,
     [switch]$Resume,
     [int]$MaxWorkerAttempts = 3,
+    # Wait before retrying an attempt that failed on a temporary provider outage or rate limit.
+    [int]$ProviderRetryDelaySeconds = 60,
     [int]$StaleAfterSeconds = 7200,
     [switch]$StopOnWorkerFailure,
     [switch]$SkipAutoAdvanceGit,
@@ -32,6 +34,10 @@ $gitConfig = Get-GitWorkflowConfig -RootDir $rootDir
 if ($MaxWorkerAttempts -lt 1) {
     throw "MaxWorkerAttempts must be at least 1"
 }
+if ($ProviderRetryDelaySeconds -lt 0) {
+    throw "ProviderRetryDelaySeconds must not be negative"
+}
+$providerRetryLimit = 2
 if ($StaleAfterSeconds -lt 1) {
     throw "StaleAfterSeconds must be at least 1"
 }
@@ -791,6 +797,33 @@ function Prepare-MainApprovalCandidate {
     }
 }
 
+function Get-LatestAttemptFailure {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AssignmentId
+    )
+
+    $worker = Get-AssignmentWorkerRecord $rootDir $AssignmentId
+    if ($null -eq $worker) { return $null }
+    $history = Read-HarnessFailureHistory $rootDir $AssignmentId
+    $entry = @($history.attempts | Where-Object { $_.invocation_id -ceq $worker.invocation_id } | Select-Object -Last 1)
+    if ($entry.Count -eq 0) { return $null }
+    return [pscustomobject]@{ Entry = $entry[0]; History = $history }
+}
+
+function New-WorkerOutcome {
+    param([bool]$Success, [int]$Attempts, [string]$Result, [string]$ErrorText = "", [string]$StopKind = "none", [string]$StopReason = "", [string]$FailureClass = "none")
+    return [pscustomobject]@{
+        Success = $Success
+        Attempts = $Attempts
+        Result = $Result
+        Error = $ErrorText
+        StopKind = $StopKind
+        StopReason = $StopReason
+        FailureClass = $FailureClass
+    }
+}
+
 function Invoke-AssignmentWorkerWithRetry {
     param(
         [Parameter(Mandatory = $true)]
@@ -800,31 +833,52 @@ function Invoke-AssignmentWorkerWithRetry {
     )
 
     $attempt = 0
+    $providerRetries = 0
     $lastError = ""
+    $lastClass = "none"
     while ($attempt -lt $MaxWorkerAttempts) {
         $attempt += 1
         $workerResult = Invoke-AssignmentWorker -Owner $Owner -CurrentAssignmentId $AssignmentId
         $state = Get-AssignmentLifecycleRecord -Owner $Owner -AssignmentId $AssignmentId
 
         if ($DryRun -or $PreflightOnly) {
-            return [pscustomobject]@{
-                Success = $workerResult.Success
-                Attempts = $attempt
-                Result = "not-run"
-                Error = $workerResult.Output
-            }
+            return New-WorkerOutcome -Success $workerResult.Success -Attempts $attempt -Result "not-run" -ErrorText $workerResult.Output
         }
 
         if ($workerResult.Success -and $state.Result -eq "pass") {
-            return [pscustomobject]@{
-                Success = $true
-                Attempts = $attempt
-                Result = "pass"
-                Error = ""
-            }
+            return New-WorkerOutcome -Success $true -Attempts $attempt -Result "pass"
         }
 
         $lastError = $workerResult.Output
+        # A refused reservation launched nothing. Report the limit; there is no failed
+        # attempt to requeue and the assignment stays where it is.
+        if ($lastError -match 'execution budget reached: ([^\r\n]+)') {
+            return New-WorkerOutcome -Success $false -Attempts ($attempt - 1) -Result "fail" -ErrorText $lastError -StopKind "budget" -StopReason ("execution budget reached: " + $Matches[1].Trim())
+        }
+
+        $failure = Get-LatestAttemptFailure -AssignmentId $AssignmentId
+        $decision = [pscustomobject]@{ action = "retry"; reason = "worker failed" }
+        if ($null -ne $failure) {
+            $lastClass = $failure.Entry.class
+            $decision = Get-HarnessFailureDecision $failure.Entry $failure.History
+        }
+
+        if ($decision.action -eq "provider_retry") {
+            if ($providerRetries -ge $providerRetryLimit) {
+                return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -StopKind "needs_operator" -StopReason ("provider kept failing after $providerRetries retries: " + $decision.reason) -FailureClass $lastClass
+            }
+            $providerRetries += 1
+            # A provider outage does not use up one of this run's worker attempts.
+            $attempt -= 1
+            Requeue-FailedAssignment -Owner $Owner -AssignmentId $AssignmentId -NextAttempt ($attempt + 1) -FailureContext $lastError | Out-Null
+            if ($ProviderRetryDelaySeconds -gt 0) { Start-Sleep -Seconds ($ProviderRetryDelaySeconds * $providerRetries) }
+            continue
+        }
+        if ($decision.action -in @("stop_budget", "stop_repeated", "stop_needs_operator")) {
+            $kind = switch ($decision.action) { "stop_budget" { "budget" } "stop_repeated" { "repeated_failure" } default { "needs_operator" } }
+            return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -StopKind $kind -StopReason $decision.reason -FailureClass $lastClass
+        }
+
         if ($attempt -ge $MaxWorkerAttempts) {
             break
         }
@@ -832,12 +886,7 @@ function Invoke-AssignmentWorkerWithRetry {
         Requeue-FailedAssignment -Owner $Owner -AssignmentId $AssignmentId -NextAttempt $attempt -FailureContext $lastError | Out-Null
     }
 
-    return [pscustomobject]@{
-        Success = $false
-        Attempts = $attempt
-        Result = "fail"
-        Error = $lastError
-    }
+    return New-WorkerOutcome -Success $false -Attempts $attempt -Result "fail" -ErrorText $lastError -FailureClass $lastClass
 }
 
 $planPath = Resolve-SeedPlanPath -RequestedPlanFile $PlanFile
@@ -886,6 +935,9 @@ $resultRows = New-Object System.Collections.Generic.List[object]
 $promotionQueue = New-Object System.Collections.Generic.List[object]
 $overallStatus = "pass"
 $failureMessage = ""
+$stopKind = "none"
+$stopReason = ""
+$stopAssignmentId = ""
 $gitAdvanceStatus = "not-run"
 $gitAdvanceFailure = ""
 $approvalCandidate = $null
@@ -1240,7 +1292,16 @@ Read the listed docs first. Then claim assignment $assignmentId, work only in $w
                     $action = "created_and_failed"
                 }
                 $overallStatus = "fail"
-                if ([string]::IsNullOrWhiteSpace($failureMessage)) {
+                if ($workerOutcome.StopKind -ne "none") {
+                    # The plan stops here and keeps the assignment and its worktree for the operator.
+                    $stopKind = $workerOutcome.StopKind
+                    $stopReason = $workerOutcome.StopReason
+                    $stopAssignmentId = $assignmentId
+                    $action = "stopped_" + $stopKind
+                    if ([string]::IsNullOrWhiteSpace($failureMessage)) {
+                        $failureMessage = "stopped ($stopKind) at ${assignmentId}: $stopReason"
+                    }
+                } elseif ([string]::IsNullOrWhiteSpace($failureMessage)) {
                     $failureMessage = "assignment failed after $workerAttempts attempt(s): $assignmentId"
                     if (-not [string]::IsNullOrWhiteSpace($workerOutcome.Error)) {
                         $failureMessage += "`n" + $workerOutcome.Error
@@ -1275,6 +1336,9 @@ Read the listed docs first. Then claim assignment $assignmentId, work only in $w
             Assignment = $relativeAssignmentPath
             Packet = $relativePacketPath
         }) | Out-Null
+        if ($stopKind -ne "none") {
+            break
+        }
     }
 
     if ($InvokeCodex -and -not $DryRun -and -not $PreflightOnly -and -not $SkipAutoAdvanceGit -and $overallStatus -eq "pass") {
@@ -1342,6 +1406,12 @@ Read the listed docs first. Then claim assignment $assignmentId, work only in $w
 
 - message: $(if ([string]::IsNullOrWhiteSpace($failureMessage)) { "none" } else { $failureMessage })
 
+## Stop
+
+- kind: $stopKind
+- assignment_id: $(if ([string]::IsNullOrWhiteSpace($stopAssignmentId)) { "none" } else { $stopAssignmentId })
+- reason: $(if ([string]::IsNullOrWhiteSpace($stopReason)) { "none" } else { $stopReason })
+
 ## Git Advance
 
 - status: $gitAdvanceStatus
@@ -1373,6 +1443,10 @@ if ($null -ne $approvalCandidate) {
 }
 if (-not [string]::IsNullOrWhiteSpace($failureMessage)) {
     Write-Output "failure: $failureMessage"
+}
+if ($stopKind -ne "none") {
+    Write-Output "stop: $stopKind"
+    Write-Output "stop_reason: $stopReason"
 }
 
 $statusScript = Join-Path $PSScriptRoot "get_harness_status.ps1"

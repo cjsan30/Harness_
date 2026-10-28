@@ -449,3 +449,12 @@ Linux/macOS shell wrappers and Git hooks automatically put PowerShell runtime ca
 이식 배치: `pwsh -NoProfile -File harness/scripts/get_execution_usage.ps1 [-Json]`.
 한도는 활성 프로필의 선택적 `execution_policy`로 지정합니다. [정책 의미와 불확실한 기록 처리](execution_usage.md)를 먼저 확인하세요. 다음 실행 제한이며 실행 중 강제 종료는 아닙니다.
 
+# 실패 분류와 작업당 시도 추가 승인 (2026-10-28)
+
+실패한 시도는 구현·환경·권한·provider·정보 부족으로 분류되며, 작업당 시도 한도(`max_attempts_per_assignment`)에는 구현 실패만 들어갑니다. 환경·권한·정보 부족·provider 사용량 한도나 같은 오류 반복이 생기면 seed 실행은 멈추고 원인을 출력합니다. 원인을 해결한 뒤 `-Resume`으로 이어갑니다.
+
+- 시도 현황: `pwsh -NoProfile -File harness/scripts/harness.ps1 attempts -AssignmentId <id>`
+- 한 작업에만 시도 추가: `... attempts -AssignmentId <id> -Grant 1 -Reason "<이유>"` (커밋 불필요, 로컬 기록)
+
+자세한 분류 기준은 [실행 사용량 문서](execution_usage.md)의 "실패 분류와 작업당 시도"를 보세요.
+
