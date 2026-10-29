@@ -25,6 +25,8 @@ $start=Tool 'start' ("Start-Sleep -Seconds 2;Set-Content -LiteralPath '"+$marker
 $fails=Tool 'fails' "Write-Output 'install failed';exit 3"
 $hangs=Tool 'hangs' 'Start-Sleep -Seconds 30'
 function Env($Repairs=@{},$Requirements=@()){return @{version=1;requirements=@($Requirements);repairs=$Repairs}}
+# Fixture profiles use the default provider; a fake CLI stands in for it.
+$env:HARNESS_CODEX_PATH=Tool 'codex' 'exit 0'
 
 Case security 'environment configuration is validated strictly' {
     foreach($bad in @(
@@ -35,7 +37,11 @@ Case security 'environment configuration is validated strictly' {
         (Env @{'start-it'=@{description='d';start=@($start);check=@($check);wait_seconds=5;shell='rm -rf /'}}),
         (Env @{'start-it'=@{description='d';start='Docker Desktop.exe --flag';check=@($check);wait_seconds=5}}),
         (Env @{} @(@{id='docker';check=@($check);repair='missing-repair'})),
-        (Env @{} @(@{id='Bad Id';check=@($check)})))){
+        (Env @{} @(@{id='Bad Id';check=@($check)})),
+        (Env @{} @(@{id='tool';check=@($check);installed='docker --version'})),
+        (Env @{} @(@{id='tool';check=@($check);install_hint=@{url='https://example.com'}})),
+        (Env @{} @(@{id='tool';check=@($check);install_hint=@{text='get it';url='http://example.com'}})),
+        (Env @{} @(@{id='tool';check=@($check);install_hint=@{text='get it';script='x'}})))){
         $root=Fixture $bad
         Reject {Get-HarnessEnvironmentConfig $root}
     }
@@ -79,6 +85,39 @@ Case integration 'readiness separates ok, repairable, repaired and needs-decisio
     $root=Fixture (Env @{} @(@{id='jdk';check=@($ok)}))
     Assert-True ((Get-HarnessEnvironmentReadiness $root).status -eq 'ready') 'ready profile blocked'
     Assert-True ((Get-HarnessEnvironmentReadiness (Fixture)).status -eq 'undeclared' -and (Get-HarnessEnvironmentReadiness (Fixture (Env))).status -eq 'undeclared') 'missing requirements not reported as undeclared'
+}
+Case integration 'a tool that is not installed is reported with its hint and never repaired' {
+    if(Test-Path -LiteralPath $marker){Remove-Item -LiteralPath $marker}
+    $ok=Tool 'ok' 'exit 0'
+    $absent=Join-Path $testRoot 'not installed [x]/docker.exe'
+    $root=Fixture (Env @{'service-start'=@{description='start';start=@($start);check=@($check);wait_seconds=30}} @(
+        @{id='docker';check=@($absent,'info');repair='service-start';install_hint=@{text='Install Docker Desktop:';url='https://docs.docker.com/desktop/'}},
+        @{id='declared-missing';installed=@($fails);check=@($ok)},
+        @{id='installed-but-down';installed=@($ok);check=@($check);repair='service-start'}))
+    $report=Get-HarnessEnvironmentReadiness $root -Repair
+    $byId=@{};foreach($i in $report.requirements){$byId[$i.id]=$i}
+    Assert-True ($report.status -eq 'blocked' -and $byId.docker.state -eq 'missing' -and $byId['declared-missing'].state -eq 'missing') "wrong: $($report|ConvertTo-Json -Depth 5 -Compress)"
+    Assert-True ($byId.docker.message.Contains('https://docs.docker.com/desktop/') -and $byId.docker.message.Contains('harness.ps1 env')) "hint missing: $($byId.docker.message)"
+    Assert-True ($byId['declared-missing'].message.Contains('no install hint declared')) 'missing hint not reported'
+    Assert-True ($byId['installed-but-down'].state -eq 'repaired') 'an installed tool was not repaired'
+    # Only the installed tool's repair ran; the missing docker never triggered a start.
+    $missingOnly=Fixture (Env @{'service-start'=@{description='start';start=@($start);check=@($check);wait_seconds=30}} @(@{id='docker';check=@($absent,'info');repair='service-start'}))
+    if(Test-Path -LiteralPath $marker){Remove-Item -LiteralPath $marker}
+    $null=Get-HarnessEnvironmentReadiness $missingOnly -Repair
+    Assert-True (-not (Test-Path -LiteralPath $marker)) 'a repair ran for a tool that is not installed'
+}
+Case integration 'tools the harness itself runs are checked before project tools' {
+    $root=Fixture
+    $report=Get-HarnessEnvironmentReadiness $root
+    $ids=@($report.requirements|Where-Object{$_.source -eq 'harness'}|ForEach-Object{$_.id})
+    Assert-True (($ids -join ',') -eq 'harness-git,harness-provider' -and $report.status -eq 'undeclared') "wrong: $($report|ConvertTo-Json -Depth 5 -Compress)"
+    $saved=$env:HARNESS_CODEX_PATH
+    try{
+        $env:HARNESS_CODEX_PATH=Join-Path $testRoot 'no codex here.exe'
+        $report=Get-HarnessEnvironmentReadiness $root
+        $provider=@($report.requirements|Where-Object{$_.id -eq 'harness-provider'})[0]
+        Assert-True ($report.status -eq 'blocked' -and $provider.state -eq 'missing' -and $provider.message.Contains('https://github.com/openai/codex')) "missing provider not blocking: $($report|ConvertTo-Json -Depth 5 -Compress)"
+    }finally{$env:HARNESS_CODEX_PATH=$saved}
 }
 Case unit 'environment failures with a declared repair are repaired, others stop' {
     $withRepair=New-HarnessFailureClassification 'environment' 'docker-unavailable' 'docker down' ([pscustomobject]@{id='docker-unavailable';repair='docker-start'})
