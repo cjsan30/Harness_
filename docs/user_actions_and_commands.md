@@ -464,7 +464,8 @@ Linux/macOS shell wrappers and Git hooks automatically put PowerShell runtime ca
 
 - 확인: `pwsh -NoProfile -File harness/scripts/harness.ps1 env [-Json]`
 - 선언된 복구까지 실행: `... env -Repair`
-- `needs_decision`이 나오면 설치 방법을 정하거나 직접 설치한 뒤 다시 확인합니다. live seed 실행은 준비되지 않은 환경에서 worker를 띄우지 않습니다.
+- 모든 도구는 **설치 여부부터** 확인합니다(하네스 자체 도구 git·provider CLI 포함). `missing`이 나오면 출력된 설치 안내 링크로 직접 설치한 뒤 다시 확인합니다. 하네스는 빠진 도구를 설치하지 않습니다(2026-10-29).
+- 설치는 됐지만 꺼져 있는 등 `check`만 실패하면 선언된 복구(예: Docker Desktop 시작)를 실행합니다. 복구가 없으면 `needs_decision`입니다. live seed 실행은 준비되지 않은 환경에서 worker를 띄우지 않습니다.
 
 # 실행 멈춤·비용 한도 알림 (2026-10-28)
 

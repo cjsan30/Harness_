@@ -1,6 +1,8 @@
 # Environment readiness and operator-declared repairs. Harness, not the worker, runs
 # these commands, and only the argv arrays written in the profile's environment
 # section. Nothing is installed or started that the operator did not declare.
+# Every requirement is first checked for being installed at all; a missing tool is
+# never "repaired" and stops before any worker launch with the declared install hint.
 $script:HarnessRepairMaxWaitSeconds = 1800
 $script:HarnessEnvironmentCheckTimeoutSeconds = 60
 
@@ -10,6 +12,20 @@ function Assert-HarnessCommandArray($Value, [string]$Label) {
     $items = @($Value)
     if ($items.Count -eq 0 -or @($items | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) { throw "$Label must be a non-empty array of strings" }
     return [string[]]$items
+}
+
+function ConvertTo-HarnessInstallHint($Value, [string]$Label) {
+    if ($null -eq $Value) { return $null }
+    foreach ($field in $Value.PSObject.Properties.Name) { if ($field -cnotin @('text','url')) { throw "unknown field '$field' in $Label install_hint" } }
+    if ($Value.text -isnot [string] -or [string]::IsNullOrWhiteSpace($Value.text) -or $Value.text.Length -gt 300) { throw "$Label install_hint needs text of 1..300 characters" }
+    if ($null -ne $Value.url -and ($Value.url -isnot [string] -or $Value.url -cnotmatch '^https://[^\s]+$' -or $Value.url.Length -gt 300)) { throw "$Label install_hint url must be an https URL" }
+    return [pscustomobject]@{ text = $Value.text.Trim(); url = $(if ($null -ne $Value.url) { [string]$Value.url } else { $null }) }
+}
+
+function Format-HarnessInstallHint($Hint) {
+    if ($null -eq $Hint) { return 'no install hint declared; decide how to provide it during planning' }
+    if ($null -eq $Hint.url) { return $Hint.text }
+    return "$($Hint.text) $($Hint.url)"
 }
 
 function Get-HarnessEnvironmentConfig([string]$RootDir) {
@@ -40,13 +56,15 @@ function Get-HarnessEnvironmentConfig([string]$RootDir) {
     $requirements = New-Object 'System.Collections.Generic.List[object]'
     foreach ($requirement in @($section.requirements)) {
         if ($null -eq $requirement) { continue }
-        foreach ($field in $requirement.PSObject.Properties.Name) { if ($field -cnotin @('id','description','check','repair')) { throw "unknown field '$field' in environment requirement" } }
+        foreach ($field in $requirement.PSObject.Properties.Name) { if ($field -cnotin @('id','description','installed','check','repair','install_hint')) { throw "unknown field '$field' in environment requirement" } }
         if ($requirement.id -isnot [string] -or $requirement.id -cnotmatch '^[a-z0-9][a-z0-9-]{1,63}$') { throw 'invalid environment requirement id' }
         if ($null -ne $requirement.repair -and -not $repairs.ContainsKey([string]$requirement.repair)) { throw "requirement $($requirement.id) refers to an undeclared repair: $($requirement.repair)" }
         $requirements.Add([pscustomobject]@{
             id = $requirement.id; description = [string]$requirement.description
+            installed = $(if ($null -ne $requirement.installed) { Assert-HarnessCommandArray $requirement.installed "requirement $($requirement.id) installed" } else { $null })
             check = (Assert-HarnessCommandArray $requirement.check "requirement $($requirement.id) check")
             repair = $(if ($null -ne $requirement.repair) { [string]$requirement.repair } else { $null })
+            install_hint = (ConvertTo-HarnessInstallHint $requirement.install_hint "requirement $($requirement.id)")
         }) | Out-Null
     }
     $config.requirements = $requirements.ToArray(); $config.repairs = $repairs
@@ -125,10 +143,59 @@ function Invoke-HarnessEnvironmentRepair([string]$RootDir, [string]$RepairId) {
     return [pscustomobject]@{ Success = $false; RepairId = $RepairId; Message = "repair $RepairId did not make its check pass within $($repair.wait_seconds) seconds: $($last.Output)" }
 }
 
+function Get-HarnessBuiltInRequirements([string]$RootDir) {
+    # Tools the harness itself runs. Only their presence is checked; they are never installed.
+    $provider = Get-HarnessConfiguredProvider $RootDir
+    $providerCommand = if ($provider -eq 'claude') { $env:HARNESS_CLAUDE_PATH } else { $env:HARNESS_CODEX_PATH }
+    if ([string]::IsNullOrWhiteSpace($providerCommand)) { $providerCommand = $provider }
+    $providerHint = if ($provider -eq 'claude') {
+        [pscustomobject]@{ text = 'Install Claude Code and sign in, or set HARNESS_CLAUDE_PATH:'; url = 'https://docs.anthropic.com/en/docs/claude-code/setup' }
+    } else {
+        [pscustomobject]@{ text = 'Install the Codex CLI and sign in, or set HARNESS_CODEX_PATH:'; url = 'https://github.com/openai/codex' }
+    }
+    return @(
+        [pscustomobject]@{ id = 'harness-git'; description = 'Git for branches, worktrees and gates'; command = 'git'; install_hint = [pscustomobject]@{ text = 'Install Git:'; url = 'https://git-scm.com/downloads' } },
+        [pscustomobject]@{ id = 'harness-provider'; description = "$provider CLI for workers"; command = $providerCommand; install_hint = $providerHint }
+    )
+}
+
+function Test-HarnessCommandInstalled([string]$Command) {
+    $resolved = Get-Command $Command -ErrorAction SilentlyContinue | Select-Object -First 1
+    return ($null -ne $resolved -and $resolved.CommandType -in @('Application','ExternalScript'))
+}
+
+function Test-HarnessRequirementInstalled([string]$RootDir, $Requirement) {
+    if ($null -ne $Requirement.installed) { return (Test-HarnessEnvironmentCheck $RootDir $Requirement.installed) }
+    $command = @($Requirement.check)[0]
+    if (Test-HarnessCommandInstalled $command) { return [pscustomobject]@{ Success = $true; Output = "found: $command"; TimedOut = $false } }
+    return [pscustomobject]@{ Success = $false; Output = "command not found: $command"; TimedOut = $false }
+}
+
+function New-HarnessMissingRequirement($Requirement, [string]$Source, [string]$Detail) {
+    return [pscustomobject]@{
+        id = $Requirement.id; source = $Source; description = $Requirement.description; state = 'missing'; repair = $null
+        install_hint = $Requirement.install_hint
+        message = "not installed ($Detail). $(Format-HarnessInstallHint $Requirement.install_hint) Then run: harness.ps1 env"
+    }
+}
+
 function Get-HarnessEnvironmentReadiness([string]$RootDir, [switch]$Repair) {
     $config = Get-HarnessEnvironmentConfig $RootDir
     $items = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($builtIn in Get-HarnessBuiltInRequirements $RootDir) {
+        if (Test-HarnessCommandInstalled $builtIn.command) {
+            $items.Add([pscustomobject]@{ id = $builtIn.id; source = 'harness'; description = $builtIn.description; state = 'ok'; repair = $null; install_hint = $builtIn.install_hint; message = 'installed' }) | Out-Null
+        } else {
+            $items.Add((New-HarnessMissingRequirement $builtIn 'harness' "command not found: $($builtIn.command)")) | Out-Null
+        }
+    }
     foreach ($requirement in $config.requirements) {
+        # Installed first: a missing tool is a planning decision, not something to start or retry.
+        $installed = Test-HarnessRequirementInstalled $RootDir $requirement
+        if (-not $installed.Success) {
+            $items.Add((New-HarnessMissingRequirement $requirement 'profile' $installed.Output)) | Out-Null
+            continue
+        }
         $check = Test-HarnessEnvironmentCheck $RootDir $requirement.check
         $state = if ($check.Success) { 'ok' } elseif ($null -ne $requirement.repair) { 'repairable' } else { 'needs_decision' }
         $message = if ($check.Success) { 'check passed' } else { $check.Output }
@@ -137,12 +204,12 @@ function Get-HarnessEnvironmentReadiness([string]$RootDir, [switch]$Repair) {
             $state = if ($repaired.Success) { 'repaired' } else { 'repair_failed' }
             $message = $repaired.Message
         }
-        $items.Add([pscustomobject]@{ id = $requirement.id; description = $requirement.description; state = $state; repair = $requirement.repair; message = $message }) | Out-Null
+        $items.Add([pscustomobject]@{ id = $requirement.id; source = 'profile'; description = $requirement.description; state = $state; repair = $requirement.repair; install_hint = $requirement.install_hint; message = $message }) | Out-Null
     }
     # Known errors that name a repair the profile does not declare would stop a run
     # instead of repairing it; surface them at planning time.
     $undeclared = @(Get-HarnessKnownErrorCatalog $RootDir | Where-Object { $null -ne $_.repair -and -not $config.repairs.ContainsKey($_.repair) } | ForEach-Object { $_.repair } | Select-Object -Unique)
-    $blocking = @($items | Where-Object { $_.state -in @('needs_decision','repair_failed','repairable') })
-    $status = if (-not $config.declared -or @($config.requirements).Count -eq 0) { 'undeclared' } elseif ($blocking.Count -gt 0) { 'blocked' } else { 'ready' }
+    $blocking = @($items | Where-Object { $_.state -in @('missing','needs_decision','repair_failed','repairable') })
+    $status = if ($blocking.Count -gt 0) { 'blocked' } elseif (-not $config.declared -or @($config.requirements).Count -eq 0) { 'undeclared' } else { 'ready' }
     return [pscustomobject]@{ status = $status; declared = $config.declared; requirements = $items.ToArray(); undeclared_repairs = $undeclared }
 }
