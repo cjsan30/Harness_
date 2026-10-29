@@ -81,9 +81,22 @@ function Start-HarnessArgvProcess([string[]]$Command, [string]$WorkingDirectory,
         $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $path) + $arguments
         $path = Get-HarnessPowerShellExecutable
     }
+    if ($Detached -and -not (Test-HarnessIsWindows)) {
+        # A long-lived service must not inherit the caller's output (F-23): detach it
+        # through sh with its standard streams on /dev/null.
+        $arguments = @('-c', 'exec "$0" "$@" </dev/null >/dev/null 2>&1 &', $path) + $arguments
+        $path = '/bin/sh'
+    }
     $startInfo.FileName = $path
     $startInfo.Arguments = ($arguments | ForEach-Object { '"' + ([string]$_).Replace('"', '\"') + '"' }) -join ' '
     $startInfo.WorkingDirectory = $WorkingDirectory
+    if ($Detached -and (Test-HarnessIsWindows)) {
+        # ShellExecute does not inherit handles, so a started service (Docker Desktop)
+        # cannot hold the pipe of a parent that captures harness output (F-23).
+        $startInfo.UseShellExecute = $true
+        $startInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+        return [Diagnostics.Process]::Start($startInfo)
+    }
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     if (-not $Detached) {
@@ -159,6 +172,13 @@ function Get-HarnessBuiltInRequirements([string]$RootDir) {
     )
 }
 
+function Get-HarnessCheckSummary([string]$Output) {
+    # Checks such as `docker info` print pages of text; the error is in the last lines.
+    $lines = @(($Output -split "\r?\n") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($lines.Count -eq 0) { return 'check failed without output' }
+    return (@($lines | Select-Object -Last 3) -join ' / ')
+}
+
 function Test-HarnessCommandInstalled([string]$Command) {
     $resolved = Get-Command $Command -ErrorAction SilentlyContinue | Select-Object -First 1
     return ($null -ne $resolved -and $resolved.CommandType -in @('Application','ExternalScript'))
@@ -198,7 +218,7 @@ function Get-HarnessEnvironmentReadiness([string]$RootDir, [switch]$Repair) {
         }
         $check = Test-HarnessEnvironmentCheck $RootDir $requirement.check
         $state = if ($check.Success) { 'ok' } elseif ($null -ne $requirement.repair) { 'repairable' } else { 'needs_decision' }
-        $message = if ($check.Success) { 'check passed' } else { $check.Output }
+        $message = if ($check.Success) { 'check passed' } else { Get-HarnessCheckSummary $check.Output }
         if ($state -eq 'repairable' -and $Repair) {
             $repaired = Invoke-HarnessEnvironmentRepair $RootDir $requirement.repair
             $state = if ($repaired.Success) { 'repaired' } else { 'repair_failed' }

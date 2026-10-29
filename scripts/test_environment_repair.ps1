@@ -79,6 +79,10 @@ Case integration 'readiness separates ok, repairable, repaired and needs-decisio
     Assert-True ($plain.status -eq 'blocked' -and $state.jdk -eq 'ok' -and $state.service -eq 'repairable' -and $state.redis -eq 'needs_decision') "wrong: $($plain|ConvertTo-Json -Depth 5 -Compress)"
     Assert-True (-not (Test-Path -LiteralPath $marker)) 'a check without -Repair started the service'
     Assert-True (@($plain.undeclared_repairs) -contains 'docker-start') 'undeclared known-error repair not reported'
+    $noisy=Tool 'noisy' ("1..40|ForEach-Object{Write-Output ('plugin line '+`$_)};Write-Output 'Server:';Write-Output 'failed to connect to the docker API';exit 1")
+    $short=Get-HarnessEnvironmentReadiness (Fixture (Env @{} @(@{id='docker';check=@($noisy)})))
+    $msg=@($short.requirements|Where-Object{$_.id -eq 'docker'})[0].message
+    Assert-True ($msg -eq 'plugin line 40 / Server: / failed to connect to the docker API') "check output not summarized: $msg"
     $repaired=Get-HarnessEnvironmentReadiness $root -Repair
     $state=@{};foreach($i in $repaired.requirements){$state[$i.id]=$i.state}
     Assert-True ($state.service -eq 'repaired' -and $repaired.status -eq 'blocked') 'repair or blocking decision wrong'
@@ -118,6 +122,27 @@ Case integration 'tools the harness itself runs are checked before project tools
         $provider=@($report.requirements|Where-Object{$_.id -eq 'harness-provider'})[0]
         Assert-True ($report.status -eq 'blocked' -and $provider.state -eq 'missing' -and $provider.message.Contains('https://github.com/openai/codex')) "missing provider not blocking: $($report|ConvertTo-Json -Depth 5 -Compress)"
     }finally{$env:HARNESS_CODEX_PATH=$saved}
+}
+# Field finding F-23: a started service (Docker Desktop) inherited the caller's output
+# pipe, so a parent that captures harness output waited until the service exited.
+Case integration 'a started service does not hold the caller output open' {
+    $pidFile=Join-Path $testRoot ('daemon '+[Guid]::NewGuid().ToString('N')+'.pid')
+    $daemon=Tool 'daemon' ("Set-Content -LiteralPath '"+$pidFile.Replace("'","''")+"' -Value `$PID;Write-Output 'daemon output';Start-Sleep -Seconds 40")
+    $common=(Join-Path $PSScriptRoot 'harness_common.ps1').Replace("'","''")
+    $starter=Tool 'starter' (". '$common';`$null=Start-HarnessArgvProcess @('"+$daemon.Replace("'","''")+"') (Get-Location).Path -Detached;Write-Output 'started'")
+    $timer=[Diagnostics.Stopwatch]::StartNew()
+    try{
+        $result=Invoke-HarnessProcess (Get-HarnessPowerShellExecutable) @('-NoProfile','-ExecutionPolicy','Bypass','-File',$starter) -AllowFailure
+        $timer.Stop()
+        Assert-True ($result.Success -and $result.Output.Contains('started')) "starter failed: $($result.Output)"
+        Assert-True ($timer.Elapsed.TotalSeconds -lt 25) "caller waited $([int]$timer.Elapsed.TotalSeconds)s for the started service"
+        Assert-True (-not $result.Output.Contains('daemon output')) 'service output reached the caller'
+        $deadline=[DateTime]::UtcNow.AddSeconds(15)
+        while(-not (Test-Path -LiteralPath $pidFile) -and [DateTime]::UtcNow -lt $deadline){Start-Sleep -Milliseconds 200}
+        Assert-True (Test-Path -LiteralPath $pidFile) 'the detached service did not start'
+    }finally{
+        if(Test-Path -LiteralPath $pidFile){$daemonPid=[int](Get-Content -LiteralPath $pidFile -Raw).Trim();Stop-Process -Id $daemonPid -Force -ErrorAction SilentlyContinue}
+    }
 }
 Case unit 'environment failures with a declared repair are repaired, others stop' {
     $withRepair=New-HarnessFailureClassification 'environment' 'docker-unavailable' 'docker down' ([pscustomobject]@{id='docker-unavailable';repair='docker-start'})
