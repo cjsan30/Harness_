@@ -1,11 +1,11 @@
 # CLAUDE.md — Harness_ 개발 규칙
 
 재사용 가능한 Harness 엔진(AI 코딩 worker 배정·실행 증거 기반 검증·재시도·Git 승격 통제)을 개발하는 저장소입니다.
-이 파일은 잘 바뀌지 않는 규칙만 담습니다. **진행 상황과 다음 작업은 `docs/current_state.md`에만** 기록합니다.
+이 파일은 잘 바뀌지 않는 규칙만 담습니다. **진행 상황과 다음 작업은 `local_notes/current_state.md`에만** 기록합니다. `local_notes/`는 Git에서 제외된 로컬 전용 폴더(인계 문서, 과거 기록, 실사용 발견 목록, 수정 기록)이며 원격에 올라가지 않습니다.
 
 ## 세션 시작
 
-1. `docs/current_state.md`를 읽습니다. 다른 문서는 작업 영역에 해당할 때만 읽습니다 (문서 지도는 그 파일 7절).
+1. `local_notes/current_state.md`를 읽습니다. 다른 문서는 작업 영역에 해당할 때만 읽습니다 (문서 지도는 그 파일 7절).
 2. `git status`, `git branch --show-current`로 상태를 확인합니다. 사용자가 만든 미커밋 변경은 보존합니다.
 3. 사용자 요청이 `current_state.md`의 "다음 작업"과 다르면 사용자 요청을 우선합니다.
 
@@ -55,8 +55,9 @@ pwsh -NoProfile -File scripts/install_git_hooks.ps1             # hook 설치 (c
 | 사용자 동작·명령 추가/변경 | `docs/user_actions_and_commands.md`, `configs/commands.md` |
 | 스크립트 추가/삭제/역할 변경 | `docs/feature_inventory.md`, 필요 시 `scripts/README.md` |
 | 개선 과제 진행 | `docs/improvement_backlog.md`의 해당 행 |
-| 세션 종료 | `docs/current_state.md`의 "최근 변경", "마지막 검증 기록", "다음 작업" |
-| 상세 검증 근거가 필요할 때만 | `docs/archive/verification_<영역>_<YYYY-MM-DD>.md` (새 인계 문서는 만들지 않음) |
+| 세션 종료 | `local_notes/current_state.md`의 "최근 변경", "마지막 검증 기록", "다음 작업" |
+| 실사용에서 발견한 엔진 버그·개선점, 그 수정 | `local_notes/field_findings.md`(목록·상태), `local_notes/fix_log_<YYYY-MM-DD>.md`(수정 내역) |
+| 상세 검증 근거가 필요할 때만 | `local_notes/archive/verification_<영역>_<YYYY-MM-DD>.md` (새 인계 문서는 만들지 않음) |
 
 문서 링크를 옮기거나 파일을 이동하면 저장소 전체의 상대 링크를 검사합니다.
 
